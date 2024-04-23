@@ -175,29 +175,29 @@ export type Database = {
           },
         ]
       }
-      userdetails: {
+      user_details: {
         Row: {
           birthday: string | null
-          contactnumber: string | null
-          role: Database["public"]["Enums"]["user_role"] | null
-          userid: string
+          contact_number: string | null
+          role: Database["public"]["Enums"]["user_role"]
+          user_id: string
         }
         Insert: {
           birthday?: string | null
-          contactnumber?: string | null
-          role?: Database["public"]["Enums"]["user_role"] | null
-          userid: string
+          contact_number?: string | null
+          role?: Database["public"]["Enums"]["user_role"]
+          user_id: string
         }
         Update: {
           birthday?: string | null
-          contactnumber?: string | null
-          role?: Database["public"]["Enums"]["user_role"] | null
-          userid?: string
+          contact_number?: string | null
+          role?: Database["public"]["Enums"]["user_role"]
+          user_id?: string
         }
         Relationships: [
           {
             foreignKeyName: "userdetails_userid_fkey"
-            columns: ["userid"]
+            columns: ["user_id"]
             isOneToOne: true
             referencedRelation: "users"
             referencedColumns: ["id"]
@@ -212,7 +212,7 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      user_role: "customer" | "employee"
+      user_role: "customer" | "employee" | "admin"
     }
     CompositeTypes: {
       [_ in never]: never

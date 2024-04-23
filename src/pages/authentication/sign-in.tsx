@@ -15,7 +15,6 @@ const SignInPage: FC = function () {
   const [username, setUsername] = React.useState('');
   const [password, setPassword] = React.useState('');
 
-  console.log('User:', user)
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault(); // Prevent default form submission behavior
     const email = username + '@fruitcalculator.com'; // Append domain to username to create email
