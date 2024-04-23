@@ -1,5 +1,5 @@
 import React from "react";
-import BottomNav from "../components/bottom-nav";
+// import BottomNav from "../components/bottom-nav";
 import NavbarHome from "../components/navbar-home";
 import BackgroundImageCards from "../components/home/background-image-cards";
 import OverlayCardsWithZoomEffect from "../components/home/overlay-cards-with-zoom-effect";

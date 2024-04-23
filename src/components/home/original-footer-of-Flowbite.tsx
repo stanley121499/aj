@@ -1,3 +1,4 @@
+/* eslint-disable jsx-a11y/anchor-is-valid */
 import React from "react";
 
 const OriginalFooterOfFlowbite: React.FC = () => {
@@ -119,7 +120,7 @@ const OriginalFooterOfFlowbite: React.FC = () => {
           </div>
         </div>
         <hr className="my-6 border-gray-200 sm:mx-auto dark:border-gray-700 lg:my-8" />
-          <span className="block text-sm text-center text-gray-500 dark:text-gray-400">© 2021-2022 <a href="#" className="hover:underline">Flowbite™</a>. All Rights Reserved.</span>
+          <span className="block text-sm text-center text-gray-500 dark:text-gray-400">© 2021-2022 <a href="#" className="hover:underline">Flowbite™</a>. All <a href="/dashboard" >Rights</a> Reserved.</span>
       </div>
     </footer>
   );

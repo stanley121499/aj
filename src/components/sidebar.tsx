@@ -1,36 +1,30 @@
 /* eslint-disable jsx-a11y/anchor-is-valid */
 import classNames from "classnames";
 import { Sidebar, TextInput, Tooltip } from "flowbite-react";
-import type { FC } from "react";
 import React, { useEffect, useState } from "react";
+import { FaUsers } from "react-icons/fa";
+import { FaRegNoteSticky } from "react-icons/fa6";
+import { GrTransaction } from "react-icons/gr";
 import {
   HiChartPie,
   HiCog,
-  HiInboxIn,
-  HiInformationCircle,
   HiSearch,
 } from "react-icons/hi";
-import { IoLogoWhatsapp } from "react-icons/io";
-import { TbBrandCampaignmonitor } from "react-icons/tb";
+import { IoDocumentTextOutline } from "react-icons/io5";
 import { useSidebarContext } from "../context/SidebarContext";
 import isSmallScreen from "../helpers/is-small-screen";
-import { IoMdContact } from "react-icons/io";
-import { HiTemplate } from "react-icons/hi";
-import { FaListUl } from "react-icons/fa6";
 
-const ExampleSidebar: FC = function () {
+const ExampleSidebar: React.FC = function () {
   const { isOpenOnSmallScreens: isSidebarOpenOnSmallScreens } =
     useSidebarContext();
 
   const [currentPage, setCurrentPage] = useState("");
-  const [isWhatsAppOpen, setWhatsAppOpen] = useState(true);
 
   useEffect(() => {
     const newPage = window.location.pathname;
 
     setCurrentPage(newPage);
-    setWhatsAppOpen(newPage.includes("/whatsapp/"));
-  }, [setCurrentPage, setWhatsAppOpen]);
+  }, [setCurrentPage]);
 
   return (
     <div
@@ -56,127 +50,63 @@ const ExampleSidebar: FC = function () {
             <Sidebar.Items>
               <Sidebar.ItemGroup>
                 <Sidebar.Item
-                  href="/"
+                  href="/dashboard"
                   icon={HiChartPie}
                   className={
-                    "/" === currentPage ? "bg-gray-100 dark:bg-gray-700" : ""
+                    "/dashboard" === currentPage ? "bg-gray-100 dark:bg-gray-700" : ""
                   }
                 >
                   Dashboard
                 </Sidebar.Item>
-                {/* Contacts */}
+
+                {/* Transactions */}
                 <Sidebar.Item
-                  href="/contacts"
-                  icon={IoMdContact}
+                  href="/transactions"
+                  icon={GrTransaction}
                   className={
-                    "/contacts" === currentPage
+                    "/transactions" === currentPage
                       ? "bg-gray-100 dark:bg-gray-700"
                       : ""
                   }
                 >
-                  Contacts
+                  Transactions
                 </Sidebar.Item>
-                <Sidebar.Collapse
-                  icon={IoLogoWhatsapp}
-                  label="Whatsapp"
-                  open={isWhatsAppOpen}
-                >
-                  <Sidebar.Item
-                    href="/whatsapp/conversation"
-                    icon={HiInboxIn}
-                    label="3"
-                    className={
-                      "/whatsapp/conversation" === currentPage
-                        ? "bg-gray-100 dark:bg-gray-700"
-                        : ""
-                    }
-                  >
-                    Conversation
-                  </Sidebar.Item>
-                  <Sidebar.Item
-                    href="/whatsapp/campaigns"
-                    icon={TbBrandCampaignmonitor}
-                    className={
-                      "/whatsapp/campaigns" === currentPage
-                        ? "bg-gray-100 dark:bg-gray-700"
-                        : ""
-                    }
-                  >
-                    Campaigns
-                  </Sidebar.Item>
-                  {/* Template */}
-                  <Sidebar.Item
-                    href="/whatsapp/templates"
-                    icon={HiTemplate}
-                    className={
-                      "/whatsapp/templates" === currentPage
-                        ? "bg-gray-100 dark:bg-gray-700"
-                        : ""
-                    }
-                  >
-                    Templates
-                  </Sidebar.Item>
-                  {/* Contact List */}
-                  <Sidebar.Item
-                    href="/whatsapp/contact-list"
-                    icon={FaListUl}
-                    className={
-                      "/whatsapp/contact-list" === currentPage
-                        ? "bg-gray-100 dark:bg-gray-700"
-                        : ""
-                    }
-                  >
-                    Contact List
-                  </Sidebar.Item>
 
-                </Sidebar.Collapse>
-                {/* <Sidebar.Collapse
-                  icon={HiUsers}
-                  label="Users"
-                  open={isUsersOpen}
-                >                  
-                  <Sidebar.Item
-                    href="/users/feed"
-                    className={
-                      "/users/feed" === currentPage
-                        ? "bg-gray-100 dark:bg-gray-700"
-                        : ""
-                    }
-                  >
-                    Feed
-                  </Sidebar.Item>
-                  <Sidebar.Item
-                    href="/users/settings"
-                    className={
-                      "/users/settings" === currentPage
-                        ? "bg-gray-100 dark:bg-gray-700"
-                        : ""
-                    }
-                  >
-                    Settings
-                  </Sidebar.Item>
-                </Sidebar.Collapse> */}
-              </Sidebar.ItemGroup>
-              <Sidebar.ItemGroup>
-                {/* <Sidebar.Item
-                  href="https://github.com/themesberg/flowbite-react/"
-                  icon={HiClipboard}
-                >
-                  Docs
-                </Sidebar.Item>
+                {/* Note */}
                 <Sidebar.Item
-                  href="https://flowbite-react.com/"
-                  icon={HiCollection}
+                  href="/notes"
+                  icon={FaRegNoteSticky}
+                  className={
+                    "/notes" === currentPage ? "bg-gray-100 dark:bg-gray-700" : ""
+                  }
                 >
-                  Components
-                </Sidebar.Item> */}
-                <Sidebar.Item
-                  href="https://api.whatsapp.com/send/?phone=60139968817&text&type=phone_number&app_absent=0"
-                  target="_blank"
-                  icon={HiInformationCircle}
-                >
-                  Help
+                  Notes
                 </Sidebar.Item>
+
+                {/* Result */}
+                <Sidebar.Item
+                  href="/results"
+                  icon={IoDocumentTextOutline}
+                  className={
+                    "/results" === currentPage
+                      ? "bg-gray-100 dark:bg-gray-700"
+                      : ""
+                  }
+                >
+                  Results
+                </Sidebar.Item>
+
+                {/* Users */}
+                <Sidebar.Item
+                  href="/users"
+                  icon={FaUsers}
+                  className={
+                    "/users" === currentPage ? "bg-gray-100 dark:bg-gray-700" : ""
+                  }
+                >
+                  Users
+                </Sidebar.Item>
+
               </Sidebar.ItemGroup>
             </Sidebar.Items>
           </div>
@@ -187,7 +117,7 @@ const ExampleSidebar: FC = function () {
   );
 };
 
-const BottomMenu: FC = function () {
+const BottomMenu: React.FC = function () {
   return (
     <div className="flex items-center justify-center gap-x-5">
       {/* <button className="rounded-lg p-2 hover:bg-gray-100 dark:hover:bg-gray-700">
