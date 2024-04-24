@@ -23,7 +23,9 @@ import MaintenancePage from "./pages/pages/maintenance";
 import UserListPage from "./pages/users/list";
 import UserSettingsPage from "./pages/users/settings";
 import CategoryListPage from "./pages/category/list";
-
+import NoteListPage from "./pages/notes/list";
+import { AlertComponent } from "./components/AlertComponent";
+import TransactionListPage from "./pages/transaction/list";
 
 const App: React.FC = () => (
   <AlertProvider>
@@ -35,6 +37,7 @@ const App: React.FC = () => (
               <TransactionProvider>
                 <NoteProvider>
                   <ResultProvider>
+                    <AlertComponent />
                     <BrowserRouter>
                       <Routes>
                         <Route element={<FlowbiteWrapper />}>
@@ -44,6 +47,8 @@ const App: React.FC = () => (
                             <Route path="/users/list" element={<UserListPage />} />
                             <Route path="/users/settings" element={<UserSettingsPage />} />
                             <Route path="/categories" element={<CategoryListPage />} />
+                            <Route path="/notes" element={<NoteListPage />} />
+                            <Route path="/transactions" element={<TransactionListPage />} />
                           </Route>
 
                           {/* Public Routes */}

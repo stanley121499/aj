@@ -12,6 +12,7 @@ import { useCategoryContext } from "../../context/CategoryContext";
 import { useAuthContext } from "../../context/AuthContext";
 import { useAccountBalanceContext } from "../../context/AccountBalanceContext";
 import { supabase } from "../../utils/supabaseClient";
+import { useAlertContext } from "../../context/AlertContext";
 
 type method = "CA" | "BT" | "CH";
 
@@ -19,20 +20,24 @@ const CreateNoteForm: React.FC = function () {
   const [ file, setFile] = React.useState<File | null>(null);
   const { addNote } = useNoteContext();
   const { categories } = useCategoryContext();
+  const { showAlert } = useAlertContext();
   const { user } = useAuthContext();
   const { accountBalances } = useAccountBalanceContext();
+  const [loading, setLoading] = React.useState(false);
+
   const [note, setNote] = React.useState<NoteInsert>({
     account_balance_id: "1",
     amount: 0,
     category_id: 1,
     media_url: "",
-    method: "cash",
+    method: "CA",
     status: "PENDING",
     user_id: user?.id || "",
     target: "account_balance"
   });
 
   const handleCreateNote = async () => {
+    setLoading(true);
     // find the account balance id with selected category and user id 
     const accountBalance = accountBalances.find(
       (accountBalance) =>
@@ -49,12 +54,20 @@ const CreateNoteForm: React.FC = function () {
 
     // Upload file to supabase storage
     if (file) {
-      const { data, error } = await supabase.storage
-        .from("media")
-        .upload(`media/${file.name}`, file);
+      // Generate a unique filename
+      const filename = `${Date.now()}-${file.name}`;
+      
+      const { data, error } = await supabase
+        .storage
+        .from("notes")
+        .upload(`${filename}`, file,{
+          cacheControl: '3600',
+          upsert: false
+        });
 
       if (error) {
-        alert("Error uploading file");
+        console.error(error);
+        showAlert("Failed to upload file", "error");
         return;
       }
 
@@ -66,6 +79,20 @@ const CreateNoteForm: React.FC = function () {
       media_url: note.media_url,
     });
 
+    setNote({
+      account_balance_id: "1",
+      amount: 0,
+      category_id: 1,
+      media_url: "",
+      method: "CA",
+      status: "PENDING",
+      user_id: user?.id || "",
+      target: "account_balance"
+    });
+    setFile(null);
+
+    showAlert("Note created successfully", "success");
+    setLoading(false);
   }
 
   return (
@@ -139,7 +166,8 @@ const CreateNoteForm: React.FC = function () {
         <div>
           <Label>Media</Label>
           <div className="mt-1">
-            <div className="flex w-full items-center justify-center">
+            {!file && (
+              <div className="flex w-full items-center justify-center">
               <Label
                 htmlFor="dropzone-file"
                 className="flex h-64 w-full cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-700 dark:hover:border-gray-500 dark:hover:bg-gray-600"
@@ -168,10 +196,17 @@ const CreateNoteForm: React.FC = function () {
                 <FileInput id="dropzone-file" className="hidden" onChange={(e) => setFile(e.target.files?.[0] || null)} />
               </Label>
             </div>
+            )}
+            {file && (
+              <div className="flex items-center justify-between">
+                <span>{file.name}</span>
+                <Button color="danger" onClick={() => setFile(null)}>Remove</Button>
+              </div>
+            )}
           </div>
         </div>
 
-        <Button color="primary" onClick={handleCreateNote}>
+        <Button color="primary" onClick={handleCreateNote} disabled={loading}>
           Create Note
         </Button>
       </div>

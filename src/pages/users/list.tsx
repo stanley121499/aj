@@ -4,13 +4,13 @@ import {
   Label,
   Table,
   TextInput,
-  Button
+  // Button
 } from "flowbite-react";
 import type { FC } from "react";
 import React from "react";
 import {
   HiHome,
-  HiTrash
+  // HiTrash
 } from "react-icons/hi";
 import NavbarSidebarLayout from "../../layouts/navbar-sidebar";
 import AddUserModal from "./add-user-modal";
@@ -33,13 +33,12 @@ const UserListPage: FC = function () {
         <div className="mb-1 w-full">
           <div className="mb-4">
             <Breadcrumb className="mb-4">
-              <Breadcrumb.Item href="/">
+              <Breadcrumb.Item href="/dashboard">
                 <div className="flex items-center gap-x-3">
                   <HiHome className="text-xl" />
                   <span className="dark:text-white">Home</span>
                 </div>
               </Breadcrumb.Item>
-              <Breadcrumb.Item href="#">WhatsApp</Breadcrumb.Item>
               <Breadcrumb.Item>All User</Breadcrumb.Item>
             </Breadcrumb>
             <h1 className="text-xl font-semibold text-gray-900 dark:text-white sm:text-2xl">
@@ -89,7 +88,7 @@ const UserListPage: FC = function () {
 };
 
 const UsersTable: React.FC<Users> = function ({ users }) {
-  const { deleteUser } = useUserContext();
+  // const { deleteUser } = useUserContext();
 
   return (
     <Table className="min-w-full divide-y divide-gray-200 dark:divide-gray-600">

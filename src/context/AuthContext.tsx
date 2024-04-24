@@ -59,7 +59,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     return () => {
       listener?.subscription.unsubscribe();
     };
-  }, [user]);
+  }, []);
 
 
 

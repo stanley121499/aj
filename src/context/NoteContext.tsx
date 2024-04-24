@@ -5,6 +5,7 @@ import { useAlertContext } from "./AlertContext";
 import { useAccountBalanceContext } from "./AccountBalanceContext";
 import { useUserContext } from "./UserContext";
 import { useTransactionContext, TransactionInsert } from "./TransactionContext";
+import { useBakiContext } from "./BakiContext";
 
 export type Note = Database['public']['Tables']['notes']['Row'];
 export type Notes = { notes: Note[] };
@@ -16,6 +17,7 @@ interface NoteContextProps {
   deleteNote: (note: Note) => void;
   updateNote: (note: Note) => void;
   approveNote: (note: Note) => void;
+  rejectNote: (note: Note) => void;
   loading: boolean;
 }
 
@@ -28,6 +30,7 @@ export function NoteProvider({ children }: PropsWithChildren) {
   const { accountBalances } = useAccountBalanceContext();
   const { users } = useUserContext();
   const { addTransaction } = useTransactionContext();
+  const { bakis } = useBakiContext();
 
   useEffect(() => {
     const fetchNotes = async () => {
@@ -64,6 +67,7 @@ export function NoteProvider({ children }: PropsWithChildren) {
       .subscribe();
 
     setLoading(false);
+
     return () => {
       subscription.unsubscribe();
     };
@@ -116,22 +120,42 @@ export function NoteProvider({ children }: PropsWithChildren) {
       return;
     }
 
-    const accountBalance = accountBalances.find(ab => ab.user_id === user.id);
+    if (note.target === 'account_balance') {
+      const accountBalance = accountBalances.find(ab => ab.user_id === user.id);
 
-    if (!accountBalance) {
-      console.error('Account balance not found');
-      showAlert('Account balance not found', 'error');
-      return;
+      if (!accountBalance) {
+        console.error('Account balance not found');
+        showAlert('Account balance not found', 'error');
+        return;
+      }
+
+      const transaction: TransactionInsert = {
+        account_balance_id: accountBalance.id,
+        amount: note.amount,
+        type: 'credit',
+        target: note.target,
+      };
+
+      addTransaction(transaction);
+    } else if (note.target === 'baki') {
+      const baki = bakis.find(baki => baki.user_id === user.id);
+
+      if (!baki) {
+        console.error('Baki not found');
+        showAlert('Baki not found', 'error');
+        return;
+      }
+
+      const transaction: TransactionInsert = {
+        baki_id: baki.id,
+        amount: note.amount,
+        type: 'credit',
+        target: note.target,
+      };
+
+      addTransaction(transaction);
     }
-    
-    const transaction: TransactionInsert = {
-      account_balance_id: accountBalance.id,
-      amount: note.amount,
-      type: 'credit',
-      target: 'account_balance',
-    };
 
-    addTransaction(transaction);
 
     await updateNote({
       ...note,
@@ -140,8 +164,15 @@ export function NoteProvider({ children }: PropsWithChildren) {
 
   }
 
+  const rejectNote = async (note: Note) => {
+    await updateNote({
+      ...note,
+      status: 'REJECTED',
+    });
+  }
+
   return (
-    <NoteContext.Provider value={{ notes, addNote, deleteNote, updateNote, approveNote, loading }}>
+    <NoteContext.Provider value={{ notes, addNote, deleteNote, updateNote, approveNote, loading, rejectNote }}>
       {children}
     </NoteContext.Provider>
   );

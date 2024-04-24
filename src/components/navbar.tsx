@@ -7,17 +7,10 @@ import {
 } from "flowbite-react";
 import type { FC } from "react";
 import React from "react";
-import {
-  HiSearch,
-} from "react-icons/hi";
 import { useNavigate } from "react-router-dom";
 import { useAuthContext } from "../context/AuthContext";
-import { useSidebarContext } from "../context/SidebarContext";
 
 const ExampleNavbar: React.FC = function () {
-  const { isOpenOnSmallScreens, setOpenOnSmallScreens } =
-    useSidebarContext();
-
   return (
     <Navbar fluid>
       <div className="w-full p-3 lg:px-5 lg:pl-3">
@@ -36,13 +29,6 @@ const ExampleNavbar: React.FC = function () {
           </div>
           <div className="flex items-center lg:gap-3">
             <div className="flex items-center">
-              <button
-                onClick={() => setOpenOnSmallScreens(!isOpenOnSmallScreens)}
-                className="cursor-pointer rounded p-2 text-gray-600 hover:bg-gray-100 hover:text-gray-900 focus:bg-gray-100 focus:ring-2 focus:ring-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white dark:focus:bg-gray-700 dark:focus:ring-gray-700 lg:hidden"
-              >
-                <span className="sr-only">Search</span>
-                <HiSearch className="h-6 w-6" />
-              </button>
               <DarkThemeToggle />
             </div>
             <div className="hidden lg:block">

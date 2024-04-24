@@ -200,34 +200,40 @@ export type Database = {
           account_balance_id: string | null
           amount: number
           baki_id: string | null
+          category_id: number | null
           created_at: string
           id: number
           note_id: string | null
           result_id: number | null
           target: Database["public"]["Enums"]["transaction_target"]
           type: string
+          user_id: string | null
         }
         Insert: {
           account_balance_id?: string | null
           amount?: number
           baki_id?: string | null
+          category_id?: number | null
           created_at?: string
           id?: number
           note_id?: string | null
           result_id?: number | null
           target: Database["public"]["Enums"]["transaction_target"]
           type: string
+          user_id?: string | null
         }
         Update: {
           account_balance_id?: string | null
           amount?: number
           baki_id?: string | null
+          category_id?: number | null
           created_at?: string
           id?: number
           note_id?: string | null
           result_id?: number | null
           target?: Database["public"]["Enums"]["transaction_target"]
           type?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -245,6 +251,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "transactions_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "transactions_note_id_fkey"
             columns: ["note_id"]
             isOneToOne: false
@@ -256,6 +269,13 @@ export type Database = {
             columns: ["result_id"]
             isOneToOne: false
             referencedRelation: "results"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]

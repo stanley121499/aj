@@ -7,7 +7,7 @@ import CreateNoteForm from "../components/dashboard/create-note-form";
 const DashboardPage: React.FC = function () {
   return (
     <NavbarSidebarLayout>
-      <div className="grid grid-cols-1 px-4 pt-6 xl:grid-cols-3 xl:gap-4">
+      <div className="grid grid-cols-1 px-4 pt-6 xl:grid-cols-2 xl:gap-4">
         <div className="col-span-full mb-4 xl:mb-2">
           <h1 className="text-xl font-semibold text-gray-900 dark:text-white sm:text-2xl">
             Dashboard
@@ -16,7 +16,7 @@ const DashboardPage: React.FC = function () {
         <div className="col-span-full xl:col-auto">
           <BalanceCards />
         </div>
-        <div className="col-span-2">
+        <div className="col-span-1">
           <CreateNoteForm />
         </div>
       </div>
