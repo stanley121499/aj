@@ -4,11 +4,13 @@ import {
   Label,
   Table,
   TextInput,
+  Button
 } from "flowbite-react";
 import type { FC } from "react";
 import React from "react";
 import {
   HiHome,
+  HiTrash
 } from "react-icons/hi";
 import NavbarSidebarLayout from "../../layouts/navbar-sidebar";
 import AddUserModal from "./add-user-modal";
@@ -72,7 +74,7 @@ const UserListPage: FC = function () {
           <div className="inline-block min-w-full align-middle">
             <div className="overflow-hidden shadow">
               {users.length > 0 ? (
-                <UsersTable users={users.filter((user) => user.email.toLowerCase().includes(searchValue.toLowerCase()) )} />
+                <UsersTable users={users.filter((user) => user.email.toLowerCase().includes(searchValue.toLowerCase()))} />
 
               ) : (
                 <div className="p-4 text-center">No users found</div>
@@ -87,6 +89,8 @@ const UserListPage: FC = function () {
 };
 
 const UsersTable: React.FC<Users> = function ({ users }) {
+  const { deleteUser } = useUserContext();
+
   return (
     <Table className="min-w-full divide-y divide-gray-200 dark:divide-gray-600">
       <Table.Head className="bg-gray-100 dark:bg-gray-700">
@@ -94,6 +98,8 @@ const UsersTable: React.FC<Users> = function ({ users }) {
         <Table.HeadCell>Birthday</Table.HeadCell>
         <Table.HeadCell>Phone Number</Table.HeadCell>
         <Table.HeadCell>Role</Table.HeadCell>
+        <Table.HeadCell>Baki Total</Table.HeadCell>
+        <Table.HeadCell>Account Balance Total</Table.HeadCell>
         <Table.HeadCell>Actions</Table.HeadCell>
       </Table.Head>
       <Table.Body className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
@@ -103,10 +109,19 @@ const UsersTable: React.FC<Users> = function ({ users }) {
             <Table.Cell>{user.user_detail.birthday}</Table.Cell>
             <Table.Cell>{user.user_detail.contact_number}</Table.Cell>
             <Table.Cell>{user.user_detail.role}</Table.Cell>
+            <Table.Cell>{user.baki.reduce((acc, baki) => acc + baki.balance, 0)}</Table.Cell>
+            <Table.Cell>{user.account_balance.reduce((acc, account_balance) => acc + account_balance.balance, 0)}</Table.Cell>
             <Table.Cell>
               <div className="flex items-center gap-x-3 whitespace-nowrap">
                 <EditUserModal user={user} />
                 {/* Removed DeleteUserModal from Actions */}
+                <Button
+                  className="text-red-600 dark:text-red-400"
+                  onClick={() => deleteUser(user)}
+                >
+                  <HiTrash />
+                </Button>
+
               </div>
             </Table.Cell>
           </Table.Row>
@@ -116,11 +131,5 @@ const UsersTable: React.FC<Users> = function ({ users }) {
   );
 };
 
-// const getTags = (tags: string[]) => {
-//   return tags.map((tag) => (
-//     <span key={tag} className="bg-blue-100 text-blue-800 text-xs font-medium me-2 px-2.5 py-0.5 rounded dark:bg-blue-900 dark:text-blue-300">{tag}</span>
-
-//   ));
-// }
 
 export default UserListPage;
