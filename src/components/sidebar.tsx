@@ -2,6 +2,7 @@
 import classNames from "classnames";
 import { Sidebar } from "flowbite-react";
 import React, { useEffect, useState } from "react";
+import { BiSolidCategory } from "react-icons/bi";
 import { FaUsers } from "react-icons/fa";
 import { FaRegNoteSticky } from "react-icons/fa6";
 import { GrTransaction } from "react-icons/gr";
@@ -9,9 +10,9 @@ import {
   HiChartPie,
 } from "react-icons/hi";
 import { IoDocumentTextOutline } from "react-icons/io5";
+import { useAuthContext } from "../context/AuthContext";
 import { useSidebarContext } from "../context/SidebarContext";
 import isSmallScreen from "../helpers/is-small-screen";
-import { useAuthContext } from "../context/AuthContext";
 
 const ExampleSidebar: React.FC = function () {
   const { isOpenOnSmallScreens: isSidebarOpenOnSmallScreens } =
@@ -101,6 +102,19 @@ const ExampleSidebar: React.FC = function () {
                     }
                   >
                     Users
+                  </Sidebar.Item>
+                )}
+
+                {/* Categories */}
+                {(user_detail?.role === "admin" || user_detail?.role === "employee") && (
+                  <Sidebar.Item
+                    href="/categories"
+                    icon={BiSolidCategory}
+                    className={
+                      "/categories" === currentPage ? "bg-gray-100 dark:bg-gray-700" : ""
+                    }
+                  >
+                    Categories
                   </Sidebar.Item>
                 )}
 

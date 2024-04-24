@@ -13,7 +13,7 @@ interface BakiContextProps {
   deleteBaki: (baki: Baki) => void;
   updateBaki: (baki: Baki) => void;
   loading: boolean;
-  currentUserBaki: Baki | null;
+  currentUserBaki: Baki[];
 }
 
 const BakiContext = createContext<BakiContextProps>(undefined!);
@@ -23,7 +23,7 @@ export function BakiProvider({ children }: PropsWithChildren) {
   const [loading, setLoading] = useState(true);
   const { showAlert } = useAlertContext();
   const { user } = useAuthContext();
-  const [currentUserBaki, setCurrentUserBaki] = useState<Baki | null>(null);
+  const [currentUserBaki, setCurrentUserBaki] = useState<Baki[]>([]);
   
 
   useEffect(() => {
@@ -38,7 +38,7 @@ export function BakiProvider({ children }: PropsWithChildren) {
       }
 
       setBakis(bakis || []);
-      setCurrentUserBaki(bakis?.find(baki => baki.user_id === user?.id) || null);      
+      setCurrentUserBaki(bakis?.filter(baki => baki.user_id === user?.id) || []);
       setLoading(false);
     };
 

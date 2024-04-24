@@ -21,8 +21,8 @@ import NotFoundPage from "./pages/pages/404";
 import ServerErrorPage from "./pages/pages/500";
 import MaintenancePage from "./pages/pages/maintenance";
 import UserListPage from "./pages/users/list";
-import UserProfilePage from "./pages/users/profile";
 import UserSettingsPage from "./pages/users/settings";
+import CategoryListPage from "./pages/category/list";
 
 
 const App: React.FC = () => (
@@ -42,8 +42,8 @@ const App: React.FC = () => (
                           <Route element={<ProtectedRoute />} >
                             <Route path="/dashboard" element={<DashboardPage />} />
                             <Route path="/users/list" element={<UserListPage />} />
-                            <Route path="/users/profile" element={<UserProfilePage />} />
                             <Route path="/users/settings" element={<UserSettingsPage />} />
+                            <Route path="/categories" element={<CategoryListPage />} />
                           </Route>
 
                           {/* Public Routes */}

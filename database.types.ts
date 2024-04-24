@@ -90,15 +90,15 @@ export type Database = {
       categories: {
         Row: {
           id: number
-          name: string | null
+          name: string
         }
         Insert: {
           id?: number
-          name?: string | null
+          name: string
         }
         Update: {
           id?: number
-          name?: string | null
+          name?: string
         }
         Relationships: []
       }
@@ -112,6 +112,7 @@ export type Database = {
           media_url: string
           method: string
           status: string
+          target: Database["public"]["Enums"]["transaction_target"]
           user_id: string
         }
         Insert: {
@@ -123,6 +124,7 @@ export type Database = {
           media_url: string
           method: string
           status?: string
+          target: Database["public"]["Enums"]["transaction_target"]
           user_id: string
         }
         Update: {
@@ -134,6 +136,7 @@ export type Database = {
           media_url?: string
           method?: string
           status?: string
+          target?: Database["public"]["Enums"]["transaction_target"]
           user_id?: string
         }
         Relationships: [

@@ -13,7 +13,7 @@ interface AccountBalanceContextProps {
   deleteAccountBalance: (accountBalance: AccountBalance) => void;
   updateAccountBalance: (accountBalance: AccountBalance) => void;
   loading: boolean;
-  currentUserAccountBalance: AccountBalance | null;
+  currentUserAccountBalance: AccountBalance[];
 }
 
 const AccountBalanceContext = createContext<AccountBalanceContextProps>(undefined!);
@@ -23,7 +23,7 @@ export function AccountBalanceProvider({ children }: PropsWithChildren) {
   const [loading, setLoading] = useState(true);
   const { showAlert } = useAlertContext();
   const { user } = useAuthContext();
-  const [currentUserAccountBalance, setCurrentUserAccountBalance] = useState<AccountBalance | null>(null);
+  const [currentUserAccountBalance, setCurrentUserAccountBalance] = useState<AccountBalance[]>([]);
 
   useEffect(() => {
     const fetchAccountBalances = async () => {
@@ -37,7 +37,7 @@ export function AccountBalanceProvider({ children }: PropsWithChildren) {
       }
 
       setAccountBalances(accountBalances || []);
-      setCurrentUserAccountBalance(accountBalances?.find(accountBalance => accountBalance.user_id === user?.id) || null);
+      setCurrentUserAccountBalance(accountBalances?.filter(accountBalance => accountBalance.user_id === user?.id) || []);
       setLoading(false);
     };
 
@@ -65,7 +65,7 @@ export function AccountBalanceProvider({ children }: PropsWithChildren) {
     return () => {
       subscription.unsubscribe();
     };
-  }, [showAlert]);
+  }, [showAlert, user?.id]);
 
   const addAccountBalance = async (accountBalance: AccountBalance) => {
     const { data, error } = await supabase

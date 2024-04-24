@@ -44,8 +44,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
         setUserDetail(user_detail);
       }
-
-
+      
       setUser(user);
       setLoading(false); // Update loading state after user is set
     };

@@ -29,6 +29,7 @@ const CreateNoteForm: React.FC = function () {
     method: "cash",
     status: "PENDING",
     user_id: user?.id || "",
+    target: "account_balance"
   });
 
   const handleCreateNote = async () => {
@@ -117,6 +118,21 @@ const CreateNoteForm: React.FC = function () {
               <option value="CA">CA</option>
               <option value="BT">BT</option>
               <option value="CH">CH</option>
+            </Select>
+          </div>
+        </div>
+        <div>
+          <Label>For</Label>
+          <div className="mt-1">
+            <Select
+              value={note.target}
+              onChange={(e) => setNote({
+                ...note,
+                target: e.target.value as "account_balance" | "baki",
+              })}
+            >
+              <option value="account_balance">Account Balance</option>
+              <option value="baki">Baki</option>
             </Select>
           </div>
         </div>

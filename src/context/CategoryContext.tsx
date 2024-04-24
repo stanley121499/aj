@@ -5,10 +5,11 @@ import { useAlertContext } from "./AlertContext";
 
 export type Category = Database['public']['Tables']['categories']['Row'];
 export type Categories = { categories: Category[] };
+export type CategoryInsert = Database['public']['Tables']['categories']['Insert'];
 
 interface CategoryContextProps {
   categories: Category[];
-  addCategory: (category: Category) => void;
+  addCategory: (category: CategoryInsert) => void;
   deleteCategory: (category: Category) => void;
   updateCategory: (category: Category) => void;
   loading: boolean;
@@ -62,8 +63,8 @@ export function CategoryProvider({ children }: PropsWithChildren) {
     };
   }, [showAlert]);
 
-  const addCategory = async (category: Category) => {
-    const { data, error } = await supabase
+  const addCategory = async (category: CategoryInsert) => {
+    const { error } = await supabase
       .from('categories')
       .insert(category);
 
@@ -72,8 +73,6 @@ export function CategoryProvider({ children }: PropsWithChildren) {
       showAlert('Error adding category', 'error');
       return;
     }
-
-    setCategories(prev => [data![0], ...prev]);
   };
 
   const deleteCategory = async (category: Category) => {
@@ -87,8 +86,6 @@ export function CategoryProvider({ children }: PropsWithChildren) {
       showAlert('Error deleting category', 'error');
       return;
     }
-
-    setCategories(prev => prev.filter(c => c.id !== category.id));
   };
 
   const updateCategory = async (category: Category) => {
@@ -102,8 +99,6 @@ export function CategoryProvider({ children }: PropsWithChildren) {
       showAlert('Error updating category', 'error');
       return;
     }
-
-    setCategories(prev => prev.map(c => c.id === category.id ? category : c));
   };
 
   return (
