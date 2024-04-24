@@ -48,6 +48,45 @@ export type Database = {
           },
         ]
       }
+      bakis: {
+        Row: {
+          balance: number
+          category_id: number
+          created_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          balance?: number
+          category_id: number
+          created_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          balance?: number
+          category_id?: number
+          created_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "baki_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "baki_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       categories: {
         Row: {
           id: number
@@ -73,6 +112,7 @@ export type Database = {
           media_url: string
           method: string
           status: string
+          user_id: string
         }
         Insert: {
           account_balance_id: string
@@ -83,6 +123,7 @@ export type Database = {
           media_url: string
           method: string
           status?: string
+          user_id: string
         }
         Update: {
           account_balance_id?: string
@@ -93,8 +134,16 @@ export type Database = {
           media_url?: string
           method?: string
           status?: string
+          user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "notes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "public_notes_account_balance_id_fkey"
             columns: ["account_balance_id"]
@@ -145,24 +194,36 @@ export type Database = {
       }
       transactions: {
         Row: {
-          account_balance_id: string
+          account_balance_id: string | null
           amount: number
+          baki_id: string | null
           created_at: string
           id: number
+          note_id: string | null
+          result_id: number | null
+          target: Database["public"]["Enums"]["transaction_target"]
           type: string
         }
         Insert: {
-          account_balance_id: string
+          account_balance_id?: string | null
           amount?: number
+          baki_id?: string | null
           created_at?: string
           id?: number
+          note_id?: string | null
+          result_id?: number | null
+          target: Database["public"]["Enums"]["transaction_target"]
           type: string
         }
         Update: {
-          account_balance_id?: string
+          account_balance_id?: string | null
           amount?: number
+          baki_id?: string | null
           created_at?: string
           id?: number
+          note_id?: string | null
+          result_id?: number | null
+          target?: Database["public"]["Enums"]["transaction_target"]
           type?: string
         }
         Relationships: [
@@ -171,6 +232,27 @@ export type Database = {
             columns: ["account_balance_id"]
             isOneToOne: false
             referencedRelation: "account_balances"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_baki_id_fkey"
+            columns: ["baki_id"]
+            isOneToOne: false
+            referencedRelation: "bakis"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_note_id_fkey"
+            columns: ["note_id"]
+            isOneToOne: false
+            referencedRelation: "notes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_result_id_fkey"
+            columns: ["result_id"]
+            isOneToOne: false
+            referencedRelation: "results"
             referencedColumns: ["id"]
           },
         ]
@@ -212,6 +294,7 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
+      transaction_target: "baki" | "account_balance"
       user_role: "customer" | "employee" | "admin"
     }
     CompositeTypes: {

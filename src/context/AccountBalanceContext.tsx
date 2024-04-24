@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, PropsWithChildre
 import { supabase } from "../utils/supabaseClient";
 import { Database } from "../../database.types";
 import { useAlertContext } from "./AlertContext";
+import { useAuthContext } from "./AuthContext";
 
 export type AccountBalance = Database['public']['Tables']['account_balances']['Row'];
 export type AccountBalances = { accountBalances: AccountBalance[] };
@@ -12,6 +13,7 @@ interface AccountBalanceContextProps {
   deleteAccountBalance: (accountBalance: AccountBalance) => void;
   updateAccountBalance: (accountBalance: AccountBalance) => void;
   loading: boolean;
+  currentUserAccountBalance: AccountBalance | null;
 }
 
 const AccountBalanceContext = createContext<AccountBalanceContextProps>(undefined!);
@@ -20,6 +22,8 @@ export function AccountBalanceProvider({ children }: PropsWithChildren) {
   const [accountBalances, setAccountBalances] = useState<AccountBalance[]>([]);
   const [loading, setLoading] = useState(true);
   const { showAlert } = useAlertContext();
+  const { user } = useAuthContext();
+  const [currentUserAccountBalance, setCurrentUserAccountBalance] = useState<AccountBalance | null>(null);
 
   useEffect(() => {
     const fetchAccountBalances = async () => {
@@ -33,6 +37,7 @@ export function AccountBalanceProvider({ children }: PropsWithChildren) {
       }
 
       setAccountBalances(accountBalances || []);
+      setCurrentUserAccountBalance(accountBalances?.find(accountBalance => accountBalance.user_id === user?.id) || null);
       setLoading(false);
     };
 
@@ -103,7 +108,7 @@ export function AccountBalanceProvider({ children }: PropsWithChildren) {
   }
 
   return (
-    <AccountBalanceContext.Provider value={{ accountBalances, addAccountBalance, deleteAccountBalance, updateAccountBalance, loading }}>
+    <AccountBalanceContext.Provider value={{ accountBalances, addAccountBalance, deleteAccountBalance, updateAccountBalance, loading, currentUserAccountBalance }}>
       {children}
     </AccountBalanceContext.Provider>
   );

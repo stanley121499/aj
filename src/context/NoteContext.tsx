@@ -2,15 +2,20 @@ import React, { createContext, useContext, useEffect, useState, PropsWithChildre
 import { supabase } from "../utils/supabaseClient";
 import { Database } from "../../database.types";
 import { useAlertContext } from "./AlertContext";
+import { useAccountBalanceContext } from "./AccountBalanceContext";
+import { useUserContext } from "./UserContext";
+import { useTransactionContext, TransactionInsert } from "./TransactionContext";
 
 export type Note = Database['public']['Tables']['notes']['Row'];
 export type Notes = { notes: Note[] };
+export type NoteInsert = Database['public']['Tables']['notes']['Insert'];
 
 interface NoteContextProps {
   notes: Note[];
-  addNote: (note: Note) => void;
+  addNote: (note: NoteInsert) => void;
   deleteNote: (note: Note) => void;
   updateNote: (note: Note) => void;
+  approveNote: (note: Note) => void;
   loading: boolean;
 }
 
@@ -20,6 +25,9 @@ export function NoteProvider({ children }: PropsWithChildren) {
   const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(true);
   const { showAlert } = useAlertContext();
+  const { accountBalances } = useAccountBalanceContext();
+  const { users } = useUserContext();
+  const { addTransaction } = useTransactionContext();
 
   useEffect(() => {
     const fetchNotes = async () => {
@@ -61,7 +69,7 @@ export function NoteProvider({ children }: PropsWithChildren) {
     };
   }, [showAlert]);
 
-  const addNote = async (note: Note) => {
+  const addNote = async (note: NoteInsert) => {
     const { error } = await supabase
       .from('notes')
       .insert(note);
@@ -99,8 +107,41 @@ export function NoteProvider({ children }: PropsWithChildren) {
     }
   };
 
+  const approveNote = async (note: Note) => {
+    const user = users.find(user => user.id === note.user_id);
+
+    if (!user) {
+      console.error('User not found');
+      showAlert('User not found', 'error');
+      return;
+    }
+
+    const accountBalance = accountBalances.find(ab => ab.user_id === user.id);
+
+    if (!accountBalance) {
+      console.error('Account balance not found');
+      showAlert('Account balance not found', 'error');
+      return;
+    }
+    
+    const transaction: TransactionInsert = {
+      account_balance_id: accountBalance.id,
+      amount: note.amount,
+      type: 'credit',
+      target: 'account_balance',
+    };
+
+    addTransaction(transaction);
+
+    await updateNote({
+      ...note,
+      status: 'APPROVED',
+    });
+
+  }
+
   return (
-    <NoteContext.Provider value={{ notes, addNote, deleteNote, updateNote, loading }}>
+    <NoteContext.Provider value={{ notes, addNote, deleteNote, updateNote, approveNote, loading }}>
       {children}
     </NoteContext.Provider>
   );

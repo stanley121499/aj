@@ -2,13 +2,16 @@ import React, { createContext, useContext, useEffect, useState, PropsWithChildre
 import { supabase } from "../utils/supabaseClient";
 import { Database } from "../../database.types";
 import { useAlertContext } from "./AlertContext";
+import { useAccountBalanceContext } from "./AccountBalanceContext";
+import { useBakiContext } from "./BakiContext";
 
 export type Transaction = Database['public']['Tables']['transactions']['Row'];
 export type Transactions = { transactions: Transaction[] };
+export type TransactionInsert = Database['public']['Tables']['transactions']['Insert'];
 
 interface TransactionContextProps {
   transactions: Transaction[];
-  addTransaction: (transaction: Transaction) => void;
+  addTransaction: (transaction: TransactionInsert) => void;
   deleteTransaction: (transaction: Transaction) => void;
   updateTransaction: (transaction: Transaction) => void;
   loading: boolean;
@@ -20,6 +23,8 @@ export function TransactionProvider({ children }: PropsWithChildren) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const { showAlert } = useAlertContext();
+  const { accountBalances, updateAccountBalance } = useAccountBalanceContext();
+  const { bakis, updateBaki } = useBakiContext();
 
   useEffect(() => {
     const fetchTransactions = async () => {
@@ -63,7 +68,42 @@ export function TransactionProvider({ children }: PropsWithChildren) {
 
   }, [showAlert]);
 
-  const addTransaction = async (transaction: Transaction) => {
+  const addTransaction = async (transaction: TransactionInsert) => {
+    // Check transaction.target and update the balance of the target
+    if (transaction.target === 'account_balance') {
+      const accountBalance = accountBalances.find(ab => ab.id === transaction.account_balance_id);
+
+      if (!accountBalance) {
+        console.error('Account balance not found');
+        showAlert('Account balance not found', 'error');
+        return;
+      }
+
+      if (transaction.type === 'debit') {
+        accountBalance.balance -= transaction.amount || 0;
+      } else {
+        accountBalance.balance += transaction.amount || 0;
+      }
+
+      updateAccountBalance(accountBalance);
+    } else if (transaction.target === 'baki') {
+      const baki = bakis.find(baki => baki.id === transaction.baki_id);
+
+      if (!baki) {
+        console.error('Baki not found');
+        showAlert('Baki not found', 'error');
+        return;
+      }
+
+      if (transaction.type === 'debit') {
+        baki.balance -= transaction.amount || 0;
+      } else {
+        baki.balance += transaction.amount || 0;
+      }
+
+      updateBaki(baki);
+    }
+
     const { error } = await supabase
       .from('transactions')
       .insert(transaction);
@@ -89,6 +129,58 @@ export function TransactionProvider({ children }: PropsWithChildren) {
   };
 
   const updateTransaction = async (transaction: Transaction) => {
+    // Check transaction.target and update the balance of the target if the amount has changed
+    const oldTransaction = transactions.find(t => t.id === transaction.id);
+
+    if ( oldTransaction && oldTransaction.amount !== transaction.amount) {
+      if (transaction.target === 'account_balance') {
+        const accountBalance = accountBalances.find(ab => ab.id === transaction.account_balance_id);
+
+        if (!accountBalance) {
+          console.error('Account balance not found');
+          showAlert('Account balance not found', 'error');
+          return;
+        }
+
+        if ( oldTransaction.type === 'debit') {
+          accountBalance.balance += oldTransaction.amount || 0;
+        } else {
+          accountBalance.balance -= oldTransaction.amount || 0;
+        }
+
+        if (transaction.type === 'debit') {
+          accountBalance.balance -= transaction.amount || 0;
+        } else {
+          accountBalance.balance += transaction.amount || 0;
+        }
+
+        updateAccountBalance(accountBalance);
+      } else if (transaction.target === 'baki') {
+        const baki = bakis.find(baki => baki.id === transaction.baki_id);
+
+        if (!baki) {
+          console.error('Baki not found');
+          showAlert('Baki not found', 'error');
+          return;
+        }
+
+        if ( oldTransaction.type === 'debit') {
+          baki.balance += oldTransaction.amount || 0;
+        } else {
+          baki.balance -= oldTransaction.amount || 0;
+        }
+
+        if (transaction.type === 'debit') {
+          baki.balance -= transaction.amount || 0;
+        } else {
+          baki.balance += transaction.amount || 0;
+        }
+
+        updateBaki(baki);
+      }
+    }
+    
+
     const { error } = await supabase
       .from('transactions')
       .update(transaction)

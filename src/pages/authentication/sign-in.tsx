@@ -19,13 +19,11 @@ const SignInPage: FC = function () {
     e.preventDefault(); // Prevent default form submission behavior
     const email = username + '@fruitcalculator.com'; // Append domain to username to create email
     const result = await signIn(email, password);
-    console.log(result);
 
     // Handle sign-in errors
     if (result.error) {
       console.error('Sign in error:', result.error.message);
     } else {
-      console.log('Signed in successfully');
       navigate('/dashboard'); // Redirect to dashboard after successful sign-in
     }
   }

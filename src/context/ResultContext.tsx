@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useState, PropsWithChildre
 import { supabase } from "../utils/supabaseClient";
 import { Database } from "../../database.types";
 import { useAlertContext } from "./AlertContext";
-
+import { TransactionInsert, useTransactionContext } from "./TransactionContext";
 export type Result = Database['public']['Tables']['results']['Row'];
 export type Results = { results: Result[] };
 
@@ -20,6 +20,7 @@ export function ResultProvider({ children }: PropsWithChildren) {
   const [results, setResults] = useState<Result[]>([]);
   const [loading, setLoading] = useState(true);
   const { showAlert } = useAlertContext();
+  const { addTransaction } = useTransactionContext();
 
   useEffect(() => {
     const fetchResults = async () => {
@@ -72,7 +73,12 @@ export function ResultProvider({ children }: PropsWithChildren) {
       return;
     }
 
-    setResults(prev => [data![0], ...prev]);
+    // Process Result to add Transaction, check line by line for result.result and create a transaction
+    const lines = result.result.split('\n');
+
+    // TODO: Add transaction for each line
+
+
   };
 
   const deleteResult = async (result: Result) => {
@@ -87,7 +93,6 @@ export function ResultProvider({ children }: PropsWithChildren) {
       return;
     }
 
-    setResults(prev => prev.filter(r => r.id !== result.id));
   };
 
   const updateResult = async (result: Result) => {

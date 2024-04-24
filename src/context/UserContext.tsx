@@ -2,12 +2,15 @@ import React, { createContext, useContext, useEffect, useState, PropsWithChildre
 import { supabase } from "../utils/supabaseClient";
 import { Database } from "../../database.types";
 import { useAlertContext } from "./AlertContext";
+import { useCategoryContext } from "./CategoryContext";
 
 export type User = {
   id: string;
   email: string;
   password: string;
   user_detail: Database["public"]["Tables"]["user_details"]["Row"];
+  baki: Database["public"]["Tables"]["bakis"]["Row"];
+  account_balance: Database["public"]["Tables"]["account_balances"]["Row"];
 };
 export type Users = { users: User[] };
 
@@ -25,6 +28,7 @@ export function UserProvider({ children }: PropsWithChildren) {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const { showAlert } = useAlertContext();
+  const { categories } = useCategoryContext();
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -36,9 +40,9 @@ export function UserProvider({ children }: PropsWithChildren) {
         return;
       }
 
-      // for each user, fetch the user details and add them to the user object
+      // for each user, fetch the user details, account balance, and baki and add them to the user object
       const usersWithDetails = await Promise.all(
-        users.map(async (user: any) => {
+        users.users.map(async (user: any) => {
           const { data: user_detail, error } = await supabase
             .from("user_details")
             .select("*")
@@ -50,7 +54,29 @@ export function UserProvider({ children }: PropsWithChildren) {
             return { ...user, user_detail: null };
           }
 
-          return { ...user, user_detail };
+          const { data: account_balance, error: accountBalanceError } = await supabase
+            .from("account_balances")
+            .select("*")
+            .eq("user_id", user.id)
+            .single();
+
+          if (accountBalanceError) {
+            console.error("Error fetching account balance:", accountBalanceError);
+            return { ...user, account_balance: null };
+          }
+
+          const { data: baki, error: bakiError } = await supabase
+            .from("bakis")
+            .select("*")
+            .eq("user_id", user.id)
+            .single();
+
+          if (bakiError) {
+            console.error("Error fetching baki:", bakiError);
+            return { ...user, baki: null };
+          }
+
+          return { ...user, user_detail, account_balance, baki };            
         })
       );
 
@@ -63,9 +89,11 @@ export function UserProvider({ children }: PropsWithChildren) {
 
   const addUser = async (user: User) => {
     setLoading(true);
-    const { error } = await supabase.auth.admin.createUser({
+
+    const { data , error } = await supabase.auth.admin.createUser({
       email: user.email,
       password: user.password,
+      email_confirm: true
     })
 
     if (error) {
@@ -74,6 +102,40 @@ export function UserProvider({ children }: PropsWithChildren) {
       setLoading(false);
       return;
     }
+
+    // Create User Details
+    const { error: userDetailError } = await supabase
+      .from("user_details")
+      .insert([{ ...user.user_detail, user_id: data.user.id }]);
+
+    if (userDetailError) {
+      console.error("Error adding user details:", userDetailError);
+      showAlert("Error adding user details", "error");
+      setLoading(false);
+      return;
+    }
+
+    // Create Account Balance
+    categories.forEach(async (category) => {
+      await supabase
+        .from("account_balances")
+        .insert({
+          user_id: data.user.id,
+          category_id: category.id,
+          balance: 0
+        });
+    });
+
+    // Create Baki
+    categories.forEach(async (category) => {
+      await supabase
+        .from("bakis")
+        .insert({
+          user_id: data.user.id,
+          category_id: category.id,
+          balance: 0
+        });
+    });
 
     showAlert("User added successfully", "success");
     setLoading(false);
@@ -108,6 +170,19 @@ export function UserProvider({ children }: PropsWithChildren) {
       return;
     }
 
+    // Delete Baki
+    const { error: bakiError } = await supabase
+      .from("bakis")
+      .delete()
+      .eq("user_id", user.id);
+
+    if (bakiError) {
+      console.error("Error deleting baki:", bakiError);
+      showAlert("Error deleting baki", "error");
+      setLoading(false);
+      return;
+    }
+
     const { error } = await supabase.auth.admin.deleteUser(user.id);
 
     if (error) {
@@ -131,6 +206,19 @@ export function UserProvider({ children }: PropsWithChildren) {
     if (error) {
       console.error("Error updating user:", error);
       showAlert("Error updating user", "error");
+      setLoading(false);
+      return;
+    }
+
+    // Update User Details
+    const { error: userDetailError } = await supabase
+      .from("user_details")
+      .update(user.user_detail)
+      .eq("user_id", user.id);
+
+    if (userDetailError) {
+      console.error("Error updating user details:", userDetailError);
+      showAlert("Error updating user details", "error");
       setLoading(false);
       return;
     }
