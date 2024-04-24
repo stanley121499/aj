@@ -10,10 +10,9 @@ import {
 } from "flowbite-react";
 import { useCategoryContext } from "../../context/CategoryContext";
 import { useAuthContext } from "../../context/AuthContext";
-import { useAccountBalanceContext } from "../../context/AccountBalanceContext";
 import { supabase } from "../../utils/supabaseClient";
 import { useAlertContext } from "../../context/AlertContext";
-
+  
 type method = "CA" | "BT" | "CH";
 
 const CreateNoteForm: React.FC = function () {
@@ -22,11 +21,9 @@ const CreateNoteForm: React.FC = function () {
   const { categories } = useCategoryContext();
   const { showAlert } = useAlertContext();
   const { user } = useAuthContext();
-  const { accountBalances } = useAccountBalanceContext();
   const [loading, setLoading] = React.useState(false);
 
   const [note, setNote] = React.useState<NoteInsert>({
-    account_balance_id: "1",
     amount: 0,
     category_id: 1,
     media_url: "",
@@ -38,19 +35,6 @@ const CreateNoteForm: React.FC = function () {
 
   const handleCreateNote = async () => {
     setLoading(true);
-    // find the account balance id with selected category and user id 
-    const accountBalance = accountBalances.find(
-      (accountBalance) =>
-        accountBalance.category_id === note.category_id &&
-        accountBalance.user_id === note.user_id
-    );
-
-    if (!accountBalance) {
-      alert("Account Balance not found");
-      return;
-    }
-
-    note.account_balance_id = accountBalance.id;
 
     // Upload file to supabase storage
     if (file) {
@@ -80,7 +64,6 @@ const CreateNoteForm: React.FC = function () {
     });
 
     setNote({
-      account_balance_id: "1",
       amount: 0,
       category_id: 1,
       media_url: "",

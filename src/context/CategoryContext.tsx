@@ -26,7 +26,8 @@ export function CategoryProvider({ children }: PropsWithChildren) {
     const fetchCategories = async () => {
       const { data: categories, error } = await supabase
         .from('categories')
-        .select('*');
+        .select('*')
+        .order('id' , { ascending: false });
 
       if (error) {
         console.error('Error fetching categories:', error);

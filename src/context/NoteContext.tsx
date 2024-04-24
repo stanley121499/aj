@@ -2,10 +2,10 @@ import React, { createContext, useContext, useEffect, useState, PropsWithChildre
 import { supabase } from "../utils/supabaseClient";
 import { Database } from "../../database.types";
 import { useAlertContext } from "./AlertContext";
-import { useAccountBalanceContext } from "./AccountBalanceContext";
+import { useAccountBalanceContext, AccountBalanceInsert } from "./AccountBalanceContext";
 import { useUserContext } from "./UserContext";
 import { useTransactionContext, TransactionInsert } from "./TransactionContext";
-import { useBakiContext } from "./BakiContext";
+import { useBakiContext, BakiInsert } from "./BakiContext";
 
 export type Note = Database['public']['Tables']['notes']['Row'];
 export type Notes = { notes: Note[] };
@@ -27,16 +27,17 @@ export function NoteProvider({ children }: PropsWithChildren) {
   const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(true);
   const { showAlert } = useAlertContext();
-  const { accountBalances } = useAccountBalanceContext();
+  const { accountBalances, addAccountBalance } = useAccountBalanceContext();
   const { users } = useUserContext();
   const { addTransaction } = useTransactionContext();
-  const { bakis } = useBakiContext();
+  const { bakis, addBaki } = useBakiContext();
 
   useEffect(() => {
     const fetchNotes = async () => {
       const { data: notes, error } = await supabase
         .from('notes')
-        .select('*');
+        .select('*')
+        .order('id' , { ascending: false });
 
       if (error) {
         console.error('Error fetching notes:', error);
@@ -121,41 +122,84 @@ export function NoteProvider({ children }: PropsWithChildren) {
     }
 
     if (note.target === 'account_balance') {
-      const accountBalance = accountBalances.find(ab => ab.user_id === user.id);
-
+      let accountBalance = accountBalances.find(ab => ab.user_id === user.id && ab.category_id === note.category_id);
+      console.log('Account balance', accountBalance)
       if (!accountBalance) {
-        console.error('Account balance not found');
-        showAlert('Account balance not found', 'error');
-        return;
+        // Create a new account balance
+        const accountBalanceInsert: AccountBalanceInsert = {
+          user_id: user.id,
+          category_id: note.category_id,
+          balance: 0
+        };
+
+        addAccountBalance(accountBalanceInsert).then(ab => {
+          if (ab) {
+            console.log('Account balance created', ab)
+            const transaction: TransactionInsert = {
+              account_balance_id: ab.id,
+              amount: note.amount,
+              type: 'credit',
+              target: note.target,
+              category_id: note.category_id,
+              source: 'NOTE'
+            };
+
+            addTransaction(transaction);
+            console.log('Transaction created', transaction)
+          }
+        })
+      } else {
+        const transaction: TransactionInsert = {
+          account_balance_id: accountBalance.id,
+          amount: note.amount,
+          type: 'credit',
+          target: note.target,
+          category_id: note.category_id,
+          source: 'NOTE'
+        };
+        addTransaction(transaction);
+
       }
-
-      const transaction: TransactionInsert = {
-        account_balance_id: accountBalance.id,
-        amount: note.amount,
-        type: 'credit',
-        target: note.target,
-      };
-
-      addTransaction(transaction);
     } else if (note.target === 'baki') {
-      const baki = bakis.find(baki => baki.user_id === user.id);
+      const baki = bakis.find(baki => baki.user_id === user.id && baki.category_id === note.category_id);
 
       if (!baki) {
-        console.error('Baki not found');
-        showAlert('Baki not found', 'error');
-        return;
+        // Create a new baki
+        const bakiInsert: BakiInsert = {
+          user_id: user.id,
+          category_id: note.category_id,
+          balance: 0
+        };
+
+        addBaki(bakiInsert).then(baki => {
+          if (baki) {
+            console.log('Baki created', baki)
+            const transaction: TransactionInsert = {
+              baki_id: baki.id,
+              amount: note.amount,
+              type: 'credit',
+              target: note.target,
+              category_id: note.category_id,
+              source: 'NOTE'
+            };
+
+            addTransaction(transaction);
+            console.log('Transaction created', transaction)
+          }
+        })
+      } else {
+        const transaction: TransactionInsert = {
+          baki_id: baki.id,
+          amount: note.amount,
+          type: 'credit',
+          target: note.target,
+          category_id: note.category_id,
+          source: 'NOTE'
+        };
+
+        addTransaction(transaction);
       }
-
-      const transaction: TransactionInsert = {
-        baki_id: baki.id,
-        amount: note.amount,
-        type: 'credit',
-        target: note.target,
-      };
-
-      addTransaction(transaction);
     }
-
 
     await updateNote({
       ...note,

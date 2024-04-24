@@ -6,10 +6,11 @@ import { useAuthContext } from "./AuthContext";
 
 export type AccountBalance = Database['public']['Tables']['account_balances']['Row'];
 export type AccountBalances = { accountBalances: AccountBalance[] };
+export type AccountBalanceInsert = Database['public']['Tables']['account_balances']['Insert'];
 
 interface AccountBalanceContextProps {
   accountBalances: AccountBalance[];
-  addAccountBalance: (accountBalance: AccountBalance) => void;
+  addAccountBalance: (accountBalance: AccountBalanceInsert) => Promise<AccountBalance | undefined>;
   deleteAccountBalance: (accountBalance: AccountBalance) => void;
   updateAccountBalance: (accountBalance: AccountBalance) => void;
   loading: boolean;
@@ -67,7 +68,7 @@ export function AccountBalanceProvider({ children }: PropsWithChildren) {
     };
   }, [showAlert, user?.id]);
 
-  const addAccountBalance = async (accountBalance: AccountBalance) => {
+  const addAccountBalance = async (accountBalance: AccountBalanceInsert) => {
     const { data, error } = await supabase
       .from('account_balances')
       .insert(accountBalance);
@@ -78,7 +79,7 @@ export function AccountBalanceProvider({ children }: PropsWithChildren) {
       return;
     }
 
-    setAccountBalances(prev => [data![0], ...prev]);
+    return data?.[0]
   };
 
   const deleteAccountBalance = async (accountBalance: AccountBalance) => {

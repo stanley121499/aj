@@ -104,7 +104,6 @@ export type Database = {
       }
       notes: {
         Row: {
-          account_balance_id: string
           amount: number
           category_id: number
           created_at: string
@@ -116,7 +115,6 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          account_balance_id: string
           amount: number
           category_id: number
           created_at?: string
@@ -128,7 +126,6 @@ export type Database = {
           user_id: string
         }
         Update: {
-          account_balance_id?: string
           amount?: number
           category_id?: number
           created_at?: string
@@ -148,13 +145,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "public_notes_account_balance_id_fkey"
-            columns: ["account_balance_id"]
-            isOneToOne: false
-            referencedRelation: "account_balances"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "public_notes_category_id_fkey"
             columns: ["category_id"]
             isOneToOne: false
@@ -170,6 +160,8 @@ export type Database = {
           id: number
           result: string
           status: string
+          target: Database["public"]["Enums"]["transaction_target"]
+          user_id: string
         }
         Insert: {
           category_id: number
@@ -177,6 +169,8 @@ export type Database = {
           id?: number
           result: string
           status?: string
+          target: Database["public"]["Enums"]["transaction_target"]
+          user_id: string
         }
         Update: {
           category_id?: number
@@ -184,6 +178,8 @@ export type Database = {
           id?: number
           result?: string
           status?: string
+          target?: Database["public"]["Enums"]["transaction_target"]
+          user_id?: string
         }
         Relationships: [
           {
@@ -191,6 +187,13 @@ export type Database = {
             columns: ["category_id"]
             isOneToOne: false
             referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "results_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -205,6 +208,7 @@ export type Database = {
           id: number
           note_id: string | null
           result_id: number | null
+          source: string | null
           target: Database["public"]["Enums"]["transaction_target"]
           type: string
           user_id: string | null
@@ -218,6 +222,7 @@ export type Database = {
           id?: number
           note_id?: string | null
           result_id?: number | null
+          source?: string | null
           target: Database["public"]["Enums"]["transaction_target"]
           type: string
           user_id?: string | null
@@ -231,6 +236,7 @@ export type Database = {
           id?: number
           note_id?: string | null
           result_id?: number | null
+          source?: string | null
           target?: Database["public"]["Enums"]["transaction_target"]
           type?: string
           user_id?: string | null

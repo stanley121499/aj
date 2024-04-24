@@ -30,7 +30,8 @@ export function TransactionProvider({ children }: PropsWithChildren) {
     const fetchTransactions = async () => {
       const { data: transactions, error } = await supabase
         .from('transactions')
-        .select('*');
+        .select('*')
+        .order('id' , { ascending: false });
 
       if (error) {
         console.error('Error fetching transactions:', error);
@@ -116,6 +117,41 @@ export function TransactionProvider({ children }: PropsWithChildren) {
   };
 
   const deleteTransaction = async (transaction: Transaction) => {
+    // Check transaction.target and update the balance of the target
+    if (transaction.target === 'account_balance') {
+      const accountBalance = accountBalances.find(ab => ab.id === transaction.account_balance_id);
+
+      if (!accountBalance) {
+        console.error('Account balance not found');
+        showAlert('Account balance not found', 'error');
+        return;
+      }
+
+      if (transaction.type === 'debit') {
+        accountBalance.balance += transaction.amount || 0;
+      } else {
+        accountBalance.balance -= transaction.amount || 0;
+      }
+
+      updateAccountBalance(accountBalance);
+    } else if (transaction.target === 'baki') {
+      const baki = bakis.find(baki => baki.id === transaction.baki_id);
+
+      if (!baki) {
+        console.error('Baki not found');
+        showAlert('Baki not found', 'error');
+        return;
+      }
+
+      if (transaction.type === 'debit') {
+        baki.balance += transaction.amount || 0;
+      } else {
+        baki.balance -= transaction.amount || 0;
+      }
+
+      updateBaki(baki);
+    }
+
     const { error } = await supabase
       .from('transactions')
       .delete()

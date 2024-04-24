@@ -26,6 +26,7 @@ import CategoryListPage from "./pages/category/list";
 import NoteListPage from "./pages/notes/list";
 import { AlertComponent } from "./components/AlertComponent";
 import TransactionListPage from "./pages/transaction/list";
+import ResultListPage from "./pages/results/list";
 
 const App: React.FC = () => (
   <AlertProvider>
@@ -49,6 +50,7 @@ const App: React.FC = () => (
                             <Route path="/categories" element={<CategoryListPage />} />
                             <Route path="/notes" element={<NoteListPage />} />
                             <Route path="/transactions" element={<TransactionListPage />} />
+                            <Route path="/results" element={<ResultListPage />} />
                           </Route>
 
                           {/* Public Routes */}

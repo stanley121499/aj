@@ -6,10 +6,11 @@ import { useAuthContext } from "./AuthContext";
 
 export type Baki = Database['public']['Tables']['bakis']['Row'];
 export type Bakis = { bakis: Baki[] };
+export type BakiInsert = Database['public']['Tables']['bakis']['Insert'];
 
 interface BakiContextProps {
   bakis: Baki[];
-  addBaki: (baki: Baki) => void;
+  addBaki: (baki: BakiInsert) => Promise<Baki | undefined>;
   deleteBaki: (baki: Baki) => void;
   updateBaki: (baki: Baki) => void;
   loading: boolean;
@@ -68,8 +69,8 @@ export function BakiProvider({ children }: PropsWithChildren) {
     };
   }, [showAlert, user?.id]);
 
-  const addBaki = async (baki: Baki) => {
-    const { error } = await supabase
+  const addBaki = async (baki: BakiInsert) => {
+    const { data, error } = await supabase
       .from('bakis')
       .insert([baki]);
 
@@ -77,6 +78,8 @@ export function BakiProvider({ children }: PropsWithChildren) {
       console.error('Error adding baki:', error);
       showAlert('Error adding baki', 'error');
     }
+
+    return data?.[0];
   };
 
   const deleteBaki = async (baki: Baki) => {

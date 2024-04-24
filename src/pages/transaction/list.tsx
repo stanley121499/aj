@@ -82,6 +82,7 @@ const TransactionsTable: React.FC<Transactions> = function ({ transactions }) {
       <Table.Head className="bg-gray-100 dark:bg-gray-700">
         <Table.HeadCell>Customer</Table.HeadCell>
         <Table.HeadCell>Type</Table.HeadCell>
+        <Table.HeadCell>Source</Table.HeadCell>
         <Table.HeadCell>Amount</Table.HeadCell>
         <Table.HeadCell>Target</Table.HeadCell>
         <Table.HeadCell>Category</Table.HeadCell>
@@ -97,6 +98,7 @@ const TransactionsTable: React.FC<Transactions> = function ({ transactions }) {
                 <Badge color="failure" className="w-fit">Debit</Badge>
               )}
             </Table.Cell>
+            <Table.Cell>{transaction.source}</Table.Cell>
             <Table.Cell>{transaction.amount}</Table.Cell>
             <Table.Cell>{transaction.target}</Table.Cell>
             <Table.Cell>{categories.find((category) => category.id === transaction.category_id)?.name}</Table.Cell>
