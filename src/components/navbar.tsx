@@ -9,13 +9,34 @@ import type { FC } from "react";
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthContext } from "../context/AuthContext";
-
+import { useSidebarContext } from "../context/SidebarContext";
+import isSmallScreen from "../helpers/is-small-screen";
+import {
+  HiX,
+  HiMenuAlt1
+} from "react-icons/hi";
 const ExampleNavbar: React.FC = function () {
+  const { isOpenOnSmallScreens, setOpenOnSmallScreens, isPageWithSidebar } =
+    useSidebarContext();
+
   return (
     <Navbar fluid>
       <div className="w-full p-3 lg:px-5 lg:pl-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center">
+            {isPageWithSidebar && (
+              <button
+                onClick={() => setOpenOnSmallScreens(!isOpenOnSmallScreens)}
+                className="mr-3 cursor-pointer rounded p-2 text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white lg:inline"
+              >
+                <span className="sr-only">Toggle sidebar</span>
+                {isOpenOnSmallScreens && isSmallScreen() ? (
+                  <HiX className="h-6 w-6" />
+                ) : (
+                  <HiMenuAlt1 className="h-6 w-6" />
+                )}
+              </button>
+            )}
             <Navbar.Brand href="/">
               <img
                 alt=""
@@ -45,7 +66,7 @@ const UserDropdown: FC = function () {
   const { signOut, user } = useAuthContext();
   const navigate = useNavigate();
   const username = user.email.split("@")[0];
-  
+
   return (
     <Dropdown
       arrowIcon={false}
@@ -75,7 +96,7 @@ const UserDropdown: FC = function () {
       >Settings</Dropdown.Item>
       <Dropdown.Divider />
       <Dropdown.Item
-      onClick={() => signOut()}
+        onClick={() => signOut()}
       >Sign out</Dropdown.Item>
     </Dropdown>
   );
