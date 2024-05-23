@@ -20,6 +20,7 @@ import { IoIosCloseCircleOutline } from "react-icons/io";
 import { useUserContext } from "../../context/UserContext";
 import { useCategoryContext } from "../../context/CategoryContext";
 import ViewMediaModal from "./view-media-modal";
+import AddNoteModal from "./add-note-modal";
 
 const NoteListPage: FC = function () {
   const { notes, loading } = useNoteContext();
@@ -64,6 +65,9 @@ const NoteListPage: FC = function () {
                   />
                 </div>
               </form>
+            </div>
+            <div className="ml-auto flex items-center space-x-2 sm:space-x-3">
+              <AddNoteModal />
             </div>
           </div>
         </div>

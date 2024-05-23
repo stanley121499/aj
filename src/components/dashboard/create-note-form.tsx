@@ -12,14 +12,20 @@ import { useCategoryContext } from "../../context/CategoryContext";
 import { useAuthContext } from "../../context/AuthContext";
 import { supabase } from "../../utils/supabaseClient";
 import { useAlertContext } from "../../context/AlertContext";
+import { useUserContext } from "../../context/UserContext";
   
 type method = "CA" | "BT" | "CH";
 
-const CreateNoteForm: React.FC = function () {
+interface CreateNoteFormProps {
+  currentUser?: boolean;
+}
+
+const CreateNoteForm: React.FC<CreateNoteFormProps> = ({ currentUser }) => {
   const [ file, setFile] = React.useState<File | null>(null);
   const { addNote } = useNoteContext();
   const { categories } = useCategoryContext();
   const { showAlert } = useAlertContext();
+  const { users } = useUserContext();
   const { user } = useAuthContext();
   const [loading, setLoading] = React.useState(false);
 
@@ -29,7 +35,7 @@ const CreateNoteForm: React.FC = function () {
     media_url: "",
     method: "CA",
     status: "PENDING",
-    user_id: user?.id || "",
+    user_id: currentUser ? user?.id : "",
     target: "account_balance"
   });
 
@@ -80,10 +86,33 @@ const CreateNoteForm: React.FC = function () {
 
   return (
     <div className="mb-4 rounded-lg bg-white p-4 shadow dark:bg-gray-800 sm:p-6 xl:p-8">
-      <h3 className="mb-4 text-xl font-bold dark:text-white">
+      {currentUser && (
+        <h3 className="mb-4 text-xl font-bold dark:text-white">
         Create a new note
       </h3>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-1">
+      )}
+      <div className={`grid grid-cols-1 gap-4 ${currentUser? "sm:grid-cols-1" :"sm:grid-cols-2"}`}>
+        {!currentUser && (
+          <div>
+            <Label>User</Label>
+            <div className="mt-1">
+              <Select
+                value={note.user_id}
+                onChange={(e) => setNote({
+                  ...note,
+                  user_id: e.target.value,
+                })}
+              >
+                {users.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.email.split("@")[0]}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          </div>
+        )}
+
         <div>
           <Label>Amount</Label>
           <div className="mt-1">
@@ -189,7 +218,7 @@ const CreateNoteForm: React.FC = function () {
           </div>
         </div>
 
-        <Button color="primary" onClick={handleCreateNote} disabled={loading}>
+        <Button color="primary" onClick={handleCreateNote} disabled={loading} className="col-span-2 w-full mt-4">
           Create Note
         </Button>
       </div>

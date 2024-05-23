@@ -13,6 +13,7 @@ import { IoDocumentTextOutline } from "react-icons/io5";
 import { useAuthContext } from "../context/AuthContext";
 import { useSidebarContext } from "../context/SidebarContext";
 import isSmallScreen from "../helpers/is-small-screen";
+import { GiFruitBowl } from "react-icons/gi";
 
 const ExampleSidebar: React.FC = function () {
   const { isOpenOnSmallScreens: isSidebarOpenOnSmallScreens } =
@@ -24,7 +25,7 @@ const ExampleSidebar: React.FC = function () {
     const newPage = window.location.pathname;
 
     setCurrentPage(newPage);
-  }, [setCurrentPage]);
+  }, [setCurrentPage, user_detail]);
 
   return (
     <div
@@ -115,6 +116,19 @@ const ExampleSidebar: React.FC = function () {
                     }
                   >
                     Categories
+                  </Sidebar.Item>
+                )}
+
+                {/* Owe */}
+                {(user_detail?.role === "admin" || user_detail?.role === "employee") && (
+                  <Sidebar.Item
+                    href="/orange"
+                    icon={GiFruitBowl}
+                    className={
+                      "/orange" === currentPage ? "bg-gray-100 dark:bg-gray-700" : ""
+                    }
+                  >
+                    Orange
                   </Sidebar.Item>
                 )}
 

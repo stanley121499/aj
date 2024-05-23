@@ -14,7 +14,7 @@ const NavbarHome: React.FC = () => {
           className="mr-3 h-10"
         />
         <span className="self-center whitespace-nowrap text-2xl font-semibold dark:text-white">
-          Fruit Calculator
+          Fruit Basket
         </span>
       </Navbar.Brand>
       <Navbar.Toggle />
