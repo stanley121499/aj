@@ -22,10 +22,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     const fetchUser = async () => {
-      const { data: { user }, error } = await supabase.auth.getUser();
+      const {
+        data: { user },
+        error,
+      } = await supabase.auth.getUser();
 
       if (error) {
-        console.error('Error getting user:', error);
+        console.error("Error getting user:", error);
       }
 
       // Fetch user_details if user is not null
@@ -37,44 +40,62 @@ export function AuthProvider({ children }: PropsWithChildren) {
           .single();
 
         if (error) {
-          console.error('Error fetching user details:', error);
+          console.error("Error fetching user details:", error);
           setUserDetail(null);
           return;
         }
 
         setUserDetail(user_detail);
       }
-      
+
       setUser(user);
       setLoading(false); // Update loading state after user is set
     };
 
     fetchUser();
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user || null);
-      setLoading(false); // Ensure to set loading to false here as well
-    });
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setUser(session?.user || null);
+        setLoading(false); // Ensure to set loading to false here as well
+      }
+    );
 
     return () => {
       listener?.subscription.unsubscribe();
     };
   }, []);
 
-
-
   const signIn = async (email: string, password: string) => {
     setLoading(true); // Consider setting loading to true to indicate starting the sign-in process
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
     if (error) {
-      console.error('Error during sign in:', error);
+      console.error("Error during sign in:", error);
       setLoading(false); // Ensure to set loading to false in case of an error
       return { error };
     }
     setUser(data.user);
+
+    // Fetch user_details
+    const { data: user_detail, error: userDetailError } = await supabase
+      .from("user_details")
+      .select("*")
+      .eq("user_id", data.user.id)
+      .single();
+
+    if (userDetailError) {
+      console.error("Error fetching user details:", userDetailError);
+      setLoading(false);
+      return { error: userDetailError };
+    }
+
+    setUserDetail(user_detail);
     setLoading(false);
     return { user: data.user };
-  }
+  };
 
   const signOut = async () => {
     setLoading(true);
@@ -89,7 +110,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, user_detail, signIn, signOut, loading }}>
+    <AuthContext.Provider
+      value={{ user, user_detail, signIn, signOut, loading }}>
       {children}
     </AuthContext.Provider>
   );
@@ -106,4 +128,3 @@ export function useAuthContext() {
 
   return context;
 }
-

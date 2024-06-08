@@ -76,8 +76,6 @@ const CreateNoteForm: React.FC<CreateNoteFormProps> = ({ currentUser }) => {
     setLoading(false);
   };
 
-  console.log("Current User", currentUser);
-
   return (
     <div className="mb-4 rounded-lg bg-white p-4 shadow dark:bg-gray-800 sm:p-6 xl:p-8">
       {currentUser && (

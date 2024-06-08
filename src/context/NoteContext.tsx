@@ -37,7 +37,7 @@ export function NoteProvider({ children }: PropsWithChildren) {
       const { data: notes, error } = await supabase
         .from('notes')
         .select('*')
-        .order('id' , { ascending: false });
+        .order('created_at' , { ascending: false });
 
       if (error) {
         console.error('Error fetching notes:', error);
