@@ -39,6 +39,7 @@ const useInactivityLogout = (timeout: number = 60000) => { // Default to 1 minut
       window.removeEventListener('scroll', handleActivity);
       window.removeEventListener('touchstart', handleActivity);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return null;
