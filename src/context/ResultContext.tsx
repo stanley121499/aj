@@ -106,8 +106,6 @@ export function ResultProvider({ children }: PropsWithChildren) {
 
     if (data) {
       const resultId = data.id;
-      console.log("Result added", resultId);
-      console.log("Adding result", result);
       // Process Result to add Transaction, check line by line for result.result and create a transaction
       const lines = result.result.split("\n");
 
