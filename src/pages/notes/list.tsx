@@ -27,7 +27,7 @@ const NoteListPage: FC = function () {
   const { users } = useUserContext();
   const [searchValue, setSearchValue] = React.useState("");
 
-  if (loading) {
+  if (loading || !notes || notes.length === 0) {
     return <LoadingPage />;
   }
 

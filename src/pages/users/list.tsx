@@ -23,7 +23,7 @@ const UserListPage: FC = function () {
 
   const [searchValue, setSearchValue] = React.useState("");
 
-  if (loading) {
+  if (loading || !users || users.length === 0) {
     return <LoadingPage />;
   }
 

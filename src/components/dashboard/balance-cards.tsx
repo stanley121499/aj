@@ -3,11 +3,16 @@ import { Card } from "flowbite-react";
 import { useBakiContext } from "../../context/BakiContext";
 import { useAccountBalanceContext } from "../../context/AccountBalanceContext";
 import { useCategoryContext } from "../../context/CategoryContext";
+import LoadingPage from "../../pages/pages/loading";
 
 const BalanceCards: React.FC = function () {
   const { currentUserAccountBalance } = useAccountBalanceContext();
   const { currentUserBaki } = useBakiContext();
   const { categories } = useCategoryContext();
+
+  if (!currentUserAccountBalance || !currentUserBaki) {
+    return <LoadingPage />;
+  }
 
   return (
     <>
