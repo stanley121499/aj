@@ -34,7 +34,10 @@ export function UserProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     const fetchUsers = async () => {
-      const { data: users, error } = await supabase.auth.admin.listUsers()
+      const { data: users, error } = await supabase.auth.admin.listUsers({
+        page:1,
+        perPage: 1000
+      })
 
       if (error) {
         console.error("Error fetching users:", error);
