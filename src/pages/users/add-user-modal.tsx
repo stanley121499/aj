@@ -10,10 +10,7 @@ import {
 import React, { useState } from "react";
 import { FaUsersCog } from "react-icons/fa";
 import { FaPhoneFlip } from "react-icons/fa6";
-import {
-  HiMail,
-  HiPlus,
-} from "react-icons/hi";
+import { HiMail, HiPlus } from "react-icons/hi";
 import { LiaBirthdayCakeSolid } from "react-icons/lia";
 import { PiPasswordBold } from "react-icons/pi";
 import { useAlertContext } from "../../context/AlertContext";
@@ -30,20 +27,32 @@ const AddUserModal: React.FC = function () {
       birthday: "",
       role: "customer",
       contact_number: "",
-    }
+    },
   });
 
   const handleAddUser = async () => {
     // append @fruitcalculator.com to the email
     userData.email = `${userData.email.split("@")[0]}@fruitcalculator.com`;
 
-
-    await addUser(userData as User).then(() => {
-      setOpen(false);
-      showAlert("User added successfully", "success");
-    }).catch((error) => {
-      showAlert(error.message, "error");
+    // Remove empty fields in user_detail
+    (
+      Object.keys(userData.user_detail) as Array<
+        keyof typeof userData.user_detail
+      >
+    ).forEach((key) => {
+      if (userData.user_detail[key] === "") {
+        delete userData.user_detail[key];
+      }
     });
+
+    await addUser(userData as User)
+      .then(() => {
+        setOpen(false);
+        showAlert("User added successfully", "success");
+      })
+      .catch((error) => {
+        showAlert(error.message, "error");
+      });
   };
 
   return (
@@ -69,7 +78,9 @@ const AddUserModal: React.FC = function () {
                   placeholder="Bonnie"
                   icon={HiMail}
                   value={userData.email}
-                  onChange={(e) => setUserData({ ...userData, email: e.target.value })}
+                  onChange={(e) =>
+                    setUserData({ ...userData, email: e.target.value })
+                  }
                 />
               </div>
             </div>
@@ -83,7 +94,9 @@ const AddUserModal: React.FC = function () {
                   icon={PiPasswordBold}
                   type="password"
                   value={userData.password}
-                  onChange={(e) => setUserData({ ...userData, password: e.target.value })}
+                  onChange={(e) =>
+                    setUserData({ ...userData, password: e.target.value })
+                  }
                 />
               </div>
             </div>
@@ -97,7 +110,15 @@ const AddUserModal: React.FC = function () {
                   name="birthday"
                   icon={LiaBirthdayCakeSolid}
                   value={userData.user_detail.birthday}
-                  onSelectedDateChanged={(date) => setUserData({ ...userData, user_detail: { ...userData.user_detail, birthday: date.toLocaleDateString() } })}
+                  onSelectedDateChanged={(date) =>
+                    setUserData({
+                      ...userData,
+                      user_detail: {
+                        ...userData.user_detail,
+                        birthday: (date as Date).toLocaleDateString(),
+                      },
+                    } as typeof userData)
+                  }
                 />
               </div>
             </div>
@@ -111,7 +132,15 @@ const AddUserModal: React.FC = function () {
                   placeholder="09123456789"
                   icon={FaPhoneFlip}
                   value={userData.user_detail.contact_number}
-                  onChange={(e) => setUserData({ ...userData, user_detail: { ...userData.user_detail, contact_number: e.target.value } })}
+                  onChange={(e) =>
+                    setUserData({
+                      ...userData,
+                      user_detail: {
+                        ...userData.user_detail,
+                        contact_number: e.target.value,
+                      },
+                    })
+                  }
                 />
               </div>
             </div>
@@ -124,8 +153,15 @@ const AddUserModal: React.FC = function () {
                   name="role"
                   icon={FaUsersCog}
                   value={userData.user_detail.role}
-                  onChange={(e) => setUserData({ ...userData, user_detail: { ...userData.user_detail, role: e.target.value } })}
-                >
+                  onChange={(e) =>
+                    setUserData({
+                      ...userData,
+                      user_detail: {
+                        ...userData.user_detail,
+                        role: e.target.value,
+                      },
+                    })
+                  }>
                   <option value="customer">Customer</option>
                   <option value="employee">Employee</option>
                   <option value="admin">Admin</option>

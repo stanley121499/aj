@@ -23,7 +23,7 @@ const UserListPage: FC = function () {
 
   const [searchValue, setSearchValue] = React.useState("");
 
-  if (loading) {
+  if (loading || !users || users.length === 0) {
     return <LoadingPage />;
   }
 
@@ -89,7 +89,7 @@ const UserListPage: FC = function () {
 
 const UsersTable: React.FC<Users> = function ({ users }) {
   // const { deleteUser } = useUserContext();
-
+console.log(users)
   return (
     <Table className="min-w-full divide-y divide-gray-200 dark:divide-gray-600">
       <Table.Head className="bg-gray-100 dark:bg-gray-700">
@@ -105,9 +105,9 @@ const UsersTable: React.FC<Users> = function ({ users }) {
         {users.map((user) => (
           <Table.Row key={user.id} className="hover:bg-gray-100 dark:hover:bg-gray-700">
             <Table.Cell>{user.email.split("@")[0]}</Table.Cell>
-            <Table.Cell>{user.user_detail.birthday}</Table.Cell>
-            <Table.Cell>{user.user_detail.contact_number}</Table.Cell>
-            <Table.Cell>{user.user_detail.role}</Table.Cell>
+            <Table.Cell>{user.user_detail.birthday ?? ""}</Table.Cell>
+            <Table.Cell>{user.user_detail.contact_number ?? ""}</Table.Cell>
+            <Table.Cell>{user.user_detail.role ?? ""}</Table.Cell>
             <Table.Cell>{user.baki.reduce((acc, baki) => acc + baki.balance, 0)}</Table.Cell>
             <Table.Cell>{user.account_balance.reduce((acc, account_balance) => acc + account_balance.balance, 0)}</Table.Cell>
             <Table.Cell>

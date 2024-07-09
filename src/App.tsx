@@ -12,7 +12,7 @@ import { NoteProvider } from "./context/NoteContext";
 import { ResultProvider } from "./context/ResultContext";
 import { TransactionProvider } from "./context/TransactionContext";
 import { UserProvider } from "./context/UserContext";
-import './index.css';
+import "./index.css";
 import DashboardPage from "./pages";
 import SignInPage from "./pages/authentication/sign-in";
 import HomePage from "./pages/landing/home";
@@ -28,57 +28,91 @@ import { AlertComponent } from "./components/AlertComponent";
 import TransactionListPage from "./pages/transaction/list";
 import ResultListPage from "./pages/results/list";
 import OrangeListPage from "./pages/orange/list";
+import useInactivityLogout from "./hooks/useInactivityLogout";
 
-const App: React.FC = () => (
-  <AlertProvider>
-    <AuthProvider>
-      <CategoryProvider>
-        <UserProvider>
-          <BakiProvider>
-            <AccountBalanceProvider>
-              <TransactionProvider>
-                <NoteProvider>
-                  <ResultProvider>
-                    <AlertComponent />
-                    <BrowserRouter>
-                      <Routes>
-                        <Route element={<FlowbiteWrapper />}>
-                          {/* Protected Routes */}
-                          <Route element={<ProtectedRoute />} >
-                            <Route path="/dashboard" element={<DashboardPage />} />
-                            <Route path="/users/list" element={<UserListPage />} />
-                            <Route path="/users/settings" element={<UserSettingsPage />} />
-                            <Route path="/categories" element={<CategoryListPage />} />
-                            <Route path="/notes" element={<NoteListPage />} />
-                            <Route path="/transactions" element={<TransactionListPage />} />
-                            <Route path="/results" element={<ResultListPage />} />
-                            <Route path="/orange" element={<OrangeListPage />} />
+const App: React.FC = () => {
+  useInactivityLogout(60000); // 1 minute of inactivity
+  
+  return (
+    <AlertProvider>
+      <AuthProvider>
+        <CategoryProvider>
+          <UserProvider>
+            <BakiProvider>
+              <AccountBalanceProvider>
+                <TransactionProvider>
+                  <NoteProvider>
+                    <ResultProvider>
+                      <AlertComponent />
+                      <BrowserRouter>
+                        <Routes>
+                          <Route element={<FlowbiteWrapper />}>
+                            {/* Protected Routes */}
+                            <Route element={<ProtectedRoute />}>
+                              <Route
+                                path="/dashboard"
+                                element={<DashboardPage />}
+                              />
+                              <Route
+                                path="/users/list"
+                                element={<UserListPage />}
+                              />
+                              <Route
+                                path="/users/settings"
+                                element={<UserSettingsPage />}
+                              />
+                              <Route
+                                path="/categories"
+                                element={<CategoryListPage />}
+                              />
+                              <Route path="/notes" element={<NoteListPage />} />
+                              <Route
+                                path="/transactions"
+                                element={<TransactionListPage />}
+                              />
+                              <Route
+                                path="/results"
+                                element={<ResultListPage />}
+                              />
+                              <Route
+                                path="/orange"
+                                element={<OrangeListPage />}
+                              />
+                            </Route>
+
+                            {/* Public Routes */}
+                            <Route path="/" element={<HomePage />} />
+                            <Route
+                              path="/pages/maintenance"
+                              element={<MaintenancePage />}
+                            />
+                            <Route
+                              path="/authentication/sign-in"
+                              element={<SignInPage />}
+                            />
+
+                            {/* Legal Pages */}
+                            <Route
+                              path="/legal/privacy"
+                              element={<PrivacyPage />}
+                            />
+
+                            {/* Error Handling Routes */}
+                            <Route path="/500" element={<ServerErrorPage />} />
+                            <Route path="*" element={<NotFoundPage />} />
                           </Route>
-
-                          {/* Public Routes */}
-                          <Route path="/" element={<HomePage />} />
-                          <Route path="/pages/maintenance" element={<MaintenancePage />} />
-                          <Route path="/authentication/sign-in" element={<SignInPage />} />
-
-                          {/* Legal Pages */}
-                          <Route path="/legal/privacy" element={<PrivacyPage />} />
-
-                          {/* Error Handling Routes */}
-                          <Route path="/500" element={<ServerErrorPage />} />
-                          <Route path="*" element={<NotFoundPage />} />
-
-                        </Route>
-                      </Routes>
-                    </BrowserRouter>
-                  </ResultProvider>
-                </NoteProvider>
-              </TransactionProvider>
-            </AccountBalanceProvider>
-          </BakiProvider>
-        </UserProvider>
-      </CategoryProvider>
-    </AuthProvider>
-  </AlertProvider>
-);
+                        </Routes>
+                      </BrowserRouter>
+                    </ResultProvider>
+                  </NoteProvider>
+                </TransactionProvider>
+              </AccountBalanceProvider>
+            </BakiProvider>
+          </UserProvider>
+        </CategoryProvider>
+      </AuthProvider>
+    </AlertProvider>
+  );
+};
 
 export default App;

@@ -17,7 +17,7 @@ const DashboardPage: React.FC = function () {
           <BalanceCards />
         </div>
         <div className="col-span-1">
-          <CreateNoteForm />
+          <CreateNoteForm currentUser={true} />
         </div>
       </div>
     </NavbarSidebarLayout>
