@@ -99,13 +99,15 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const signOut = async () => {
     setLoading(true);
+    setUser(null);
+
     const { error } = await supabase.auth.signOut();
     if (error) {
       console.error("Error signing out:", error);
       setLoading(false);
       return { error };
     }
-    setUser(null);
+
     setLoading(false);
   };
 

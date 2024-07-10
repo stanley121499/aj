@@ -44,6 +44,7 @@ const AddUserModal: React.FC = function () {
         delete userData.user_detail[key];
       }
     });
+    console.log(userData);
 
     await addUser(userData as User)
       .then(() => {

@@ -1,4 +1,10 @@
-import React, { createContext, useContext, useEffect, useState, PropsWithChildren } from "react";
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  PropsWithChildren,
+} from "react";
 import { supabase } from "../utils/supabaseClient";
 import { Database } from "../../database.types";
 import { useAlertContext } from "./AlertContext";
@@ -57,9 +63,9 @@ export function UserProvider({ children }: PropsWithChildren) {
           if (error) {
             console.error("Error fetching user details:", error);
             return { ...user, user_detail: null };
-          }         
+          }
 
-          return { ...user, user_detail};            
+          return { ...user, user_detail };
         })
       );
 
@@ -68,7 +74,7 @@ export function UserProvider({ children }: PropsWithChildren) {
           const { data: account_balance, error } = await supabase
             .from("account_balances")
             .select("*")
-            .eq("user_id", user.id)
+            .eq("user_id", user.id);
 
           if (error) {
             console.error("Error fetching account balance:", error);
@@ -84,7 +90,7 @@ export function UserProvider({ children }: PropsWithChildren) {
           const { data: baki, error } = await supabase
             .from("bakis")
             .select("*")
-            .eq("user_id", user.id)
+            .eq("user_id", user.id);
 
           if (error) {
             console.error("Error fetching baki:", error);
@@ -98,20 +104,28 @@ export function UserProvider({ children }: PropsWithChildren) {
       setUsers(usersWithDetails);
 
       const handleChanges = (payload: any) => {
-        if (payload.eventType === 'INSERT') {
-          setUsers(prev => [payload.new, ...prev]);
-        } else if (payload.eventType === 'UPDATE') {
-          setUsers(prev => prev.map(user => user.id === payload.new.id ? payload.new : user));
-        } else if (payload.eventType === 'DELETE') {
-          setUsers(prev => prev.filter(user => user.id !== payload.old.id));
+        if (payload.eventType === "INSERT") {
+          setUsers((prev) => [payload.new, ...prev]);
+        } else if (payload.eventType === "UPDATE") {
+          setUsers((prev) =>
+            prev.map((user) =>
+              user.id === payload.new.id ? payload.new : user
+            )
+          );
+        } else if (payload.eventType === "DELETE") {
+          setUsers((prev) => prev.filter((user) => user.id !== payload.old.id));
         }
       };
-  
+
       const subscription = supabase
-        .channel('auth.users')
-        .on('postgres_changes', { event: '*', schema: 'auth', table: 'users' }, payload => {
-          handleChanges(payload);
-        })
+        .channel("auth.users")
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "auth", table: "users" },
+          (payload) => {
+            handleChanges(payload);
+          }
+        )
         .subscribe();
 
       setLoading(false);
@@ -126,12 +140,12 @@ export function UserProvider({ children }: PropsWithChildren) {
 
   const addUser = async (user: User) => {
     setLoading(true);
-
-    const { data , error } = await supabase.auth.admin.createUser({
+    console.log("Inside addUser, user: ", user);
+    const { data, error } = await supabase.auth.admin.createUser({
       email: user.email,
       password: user.password,
-      email_confirm: true
-    })
+      email_confirm: true,
+    });
 
     if (error) {
       console.error("Error adding user:", error);
@@ -154,24 +168,20 @@ export function UserProvider({ children }: PropsWithChildren) {
 
     // Create Account Balance
     categories.forEach(async (category) => {
-      await supabase
-        .from("account_balances")
-        .insert({
-          user_id: data.user.id,
-          category_id: category.id,
-          balance: 0
-        });
+      await supabase.from("account_balances").insert({
+        user_id: data.user.id,
+        category_id: category.id,
+        balance: 0,
+      });
     });
 
     // Create Baki
     categories.forEach(async (category) => {
-      await supabase
-        .from("bakis")
-        .insert({
-          user_id: data.user.id,
-          category_id: category.id,
-          balance: 0
-        });
+      await supabase.from("bakis").insert({
+        user_id: data.user.id,
+        category_id: category.id,
+        balance: 0,
+      });
     });
 
     showAlert("User added successfully", "success");
@@ -227,10 +237,9 @@ export function UserProvider({ children }: PropsWithChildren) {
 
   const updateUser = async (user: User) => {
     setLoading(true);
-    const { error } = await supabase.auth.admin.updateUserById(
-      user.id,
-      { password: user.password }
-    )
+    const { error } = await supabase.auth.admin.updateUserById(user.id, {
+      password: user.password,
+    });
 
     if (error) {
       console.error("Error updating user:", error);
@@ -257,7 +266,8 @@ export function UserProvider({ children }: PropsWithChildren) {
   };
 
   return (
-    <UserContext.Provider value={{ users, loading, addUser, deleteUser, updateUser }}>
+    <UserContext.Provider
+      value={{ users, loading, addUser, deleteUser, updateUser }}>
       {children}
     </UserContext.Provider>
   );

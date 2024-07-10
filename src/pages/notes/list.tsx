@@ -5,13 +5,11 @@ import {
   Table,
   TextInput,
   Button,
-  Badge
+  Badge,
 } from "flowbite-react";
 import type { FC } from "react";
 import React from "react";
-import {
-  HiHome
-} from "react-icons/hi";
+import { HiHome } from "react-icons/hi";
 import NavbarSidebarLayout from "../../layouts/navbar-sidebar";
 import LoadingPage from "../pages/loading";
 import { useNoteContext, Notes } from "../../context/NoteContext";
@@ -77,8 +75,13 @@ const NoteListPage: FC = function () {
           <div className="inline-block min-w-full align-middle">
             <div className="overflow-hidden shadow">
               {notes.length > 0 ? (
-                <NotesTable notes={notes.filter((note) => users.find((user) => user.id === note.user_id)?.email.includes(searchValue))} />
-
+                <NotesTable
+                  notes={notes.filter((note) =>
+                    users
+                      .find((user) => user.id === note.user_id)
+                      ?.email.includes(searchValue)
+                  )}
+                />
               ) : (
                 <div className="p-4 text-center">No notes found</div>
               )}
@@ -105,27 +108,50 @@ const NotesTable: React.FC<Notes> = function ({ notes }) {
         <Table.HeadCell>Target</Table.HeadCell>
         <Table.HeadCell>Category</Table.HeadCell>
         <Table.HeadCell>Status</Table.HeadCell>
+        <Table.HeadCell>Remarks</Table.HeadCell>
         <Table.HeadCell>Media</Table.HeadCell>
         <Table.HeadCell>Actions</Table.HeadCell>
       </Table.Head>
       <Table.Body className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
         {notes.map((note) => (
-          <Table.Row key={note.id} className="hover:bg-gray-100 dark:hover:bg-gray-700">
-            <Table.Cell>{users.find((user) => user.id === note.user_id)?.email.split("@")[0]}</Table.Cell>
+          <Table.Row
+            key={note.id}
+            className="hover:bg-gray-100 dark:hover:bg-gray-700">
+            <Table.Cell>
+              {
+                users
+                  .find((user) => user.id === note.user_id)
+                  ?.email.split("@")[0]
+              }
+            </Table.Cell>
             <Table.Cell>{note.method}</Table.Cell>
             <Table.Cell>{note.amount}</Table.Cell>
             <Table.Cell>{note.target}</Table.Cell>
-            <Table.Cell>{categories.find((category) => category.id === note.category_id)?.name}</Table.Cell>
+            <Table.Cell>
+              {
+                categories.find((category) => category.id === note.category_id)
+                  ?.name
+              }
+            </Table.Cell>
             <Table.Cell>
               {note.status === "APPROVED" ? (
-                <Badge color="green" className="w-fit">Approved</Badge>
+                <Badge color="green" className="w-fit">
+                  Approved
+                </Badge>
               ) : note.status === "PENDING" ? (
-                <Badge color="yellow" className="w-fit">Pending</Badge>
+                <Badge color="yellow" className="w-fit">
+                  Pending
+                </Badge>
               ) : (
-                <Badge color="red" className="w-fit">Rejected</Badge>
+                <Badge color="red" className="w-fit">
+                  Rejected
+                </Badge>
               )}
             </Table.Cell>
-            <Table.Cell><ViewMediaModal mediaURL={note.media_url} /></Table.Cell>
+            <Table.Cell>{note.remarks}</Table.Cell>
+            <Table.Cell>
+              {note.media_url && <ViewMediaModal mediaURL={note.media_url} />}
+            </Table.Cell>
             <Table.Cell>
               <div className="flex items-center gap-x-3 whitespace-nowrap">
                 {note.status === "PENDING" && (
@@ -133,8 +159,7 @@ const NotesTable: React.FC<Notes> = function ({ notes }) {
                     <Button
                       color="success"
                       onClick={() => approveNote(note)}
-                      className="flex items-center gap-x-2"
-                    >
+                      className="flex items-center gap-x-2">
                       <div className="flex items-center gap-x-3">
                         <FaRegCheckCircle className="text-sm" />
                         Approve
@@ -143,8 +168,7 @@ const NotesTable: React.FC<Notes> = function ({ notes }) {
                     <Button
                       color="failure"
                       onClick={() => rejectNote(note)}
-                      className="flex items-center gap-x-2"
-                    >
+                      className="flex items-center gap-x-2">
                       <div className="flex items-center gap-x-3">
                         <IoIosCloseCircleOutline className="text-sm" />
                         Reject
@@ -160,6 +184,5 @@ const NotesTable: React.FC<Notes> = function ({ notes }) {
     </Table>
   );
 };
-
 
 export default NoteListPage;

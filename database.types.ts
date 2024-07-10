@@ -108,8 +108,9 @@ export type Database = {
           category_id: number
           created_at: string
           id: string
-          media_url: string
+          media_url: string | null
           method: string
+          remarks: string | null
           status: string
           target: Database["public"]["Enums"]["transaction_target"]
           user_id: string
@@ -119,8 +120,9 @@ export type Database = {
           category_id: number
           created_at?: string
           id?: string
-          media_url: string
+          media_url?: string | null
           method: string
+          remarks?: string | null
           status?: string
           target: Database["public"]["Enums"]["transaction_target"]
           user_id: string
@@ -130,8 +132,9 @@ export type Database = {
           category_id?: number
           created_at?: string
           id?: string
-          media_url?: string
+          media_url?: string | null
           method?: string
+          remarks?: string | null
           status?: string
           target?: Database["public"]["Enums"]["transaction_target"]
           user_id?: string

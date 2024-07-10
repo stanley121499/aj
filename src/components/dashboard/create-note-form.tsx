@@ -25,6 +25,7 @@ const CreateNoteForm: React.FC<CreateNoteFormProps> = ({ currentUser }) => {
   const [note, setNote] = React.useState<NoteInsert>({
     amount: 0,
     category_id: 1,
+    remarks: "",
     media_url: "",
     method: "CA",
     status: "PENDING",
@@ -122,6 +123,23 @@ const CreateNoteForm: React.FC<CreateNoteFormProps> = ({ currentUser }) => {
             />
           </div>
         </div>
+
+        {/* Remarks */}
+        <div>
+          <Label>Remarks</Label>
+          <div className="mt-1">
+            <TextInput
+              value={note.remarks || ""}
+              onChange={(e) =>
+                setNote({
+                  ...note,
+                  remarks: e.target.value,
+                })
+              }
+            />
+          </div>
+        </div>
+
         <div>
           <Label>Category</Label>
           <div className="mt-1">

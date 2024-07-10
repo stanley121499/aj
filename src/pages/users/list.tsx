@@ -89,7 +89,7 @@ const UserListPage: FC = function () {
 
 const UsersTable: React.FC<Users> = function ({ users }) {
   // const { deleteUser } = useUserContext();
-console.log(users)
+
   return (
     <Table className="min-w-full divide-y divide-gray-200 dark:divide-gray-600">
       <Table.Head className="bg-gray-100 dark:bg-gray-700">

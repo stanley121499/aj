@@ -5,19 +5,19 @@ import React, { useEffect, useState } from "react";
 import { BiSolidCategory } from "react-icons/bi";
 import { FaUsers } from "react-icons/fa";
 import { FaRegNoteSticky } from "react-icons/fa6";
+import { GiFruitBowl } from "react-icons/gi";
 import { GrTransaction } from "react-icons/gr";
 import { HiChartPie } from "react-icons/hi";
-import { IoDocumentTextOutline } from "react-icons/io5";
+import { IoDocumentTextOutline, IoLogOutOutline } from "react-icons/io5";
 import { useAuthContext } from "../context/AuthContext";
 import { useSidebarContext } from "../context/SidebarContext";
 import isSmallScreen from "../helpers/is-small-screen";
-import { GiFruitBowl } from "react-icons/gi";
 
 const ExampleSidebar: React.FC = function () {
   const { isOpenOnSmallScreens: isSidebarOpenOnSmallScreens } =
     useSidebarContext();
   const [currentPage, setCurrentPage] = useState("");
-  const { user_detail, user } = useAuthContext();
+  const { user_detail, user, signOut } = useAuthContext();
 
   useEffect(() => {
     const newPage = window.location.pathname;
@@ -133,6 +133,13 @@ const ExampleSidebar: React.FC = function () {
                     Orange
                   </Sidebar.Item>
                 )}
+
+                {/* Logout */}
+                <Sidebar.Item
+                  icon={IoLogOutOutline}
+                  onClick={signOut}>
+                  Logout
+                </Sidebar.Item>
               </Sidebar.ItemGroup>
             </Sidebar.Items>
           </div>

@@ -31,7 +31,7 @@ import OrangeListPage from "./pages/orange/list";
 import useInactivityLogout from "./hooks/useInactivityLogout";
 
 const App: React.FC = () => {
-  useInactivityLogout(60000); // 1 minute of inactivity
+  // useInactivityLogout(60000); // 1 minute of inactivity
   
   return (
     <AlertProvider>
