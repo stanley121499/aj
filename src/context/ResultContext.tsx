@@ -127,7 +127,7 @@ export function ResultProvider({ children }: PropsWithChildren) {
             (ab) =>
               ab.user_id === user?.id && ab.category_id === result.category_id
           );
-
+          
           if (!accountBalance && user) {
             accountBalance = await addAccountBalance({
               user_id: user?.id,

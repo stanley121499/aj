@@ -24,7 +24,7 @@ const ResultListPage: FC = function () {
   const { users } = useUserContext();
   const [searchValue, setSearchValue] = React.useState("");
 
-  if (loading || !results || results.length === 0) {
+  if (loading) {
     return <LoadingPage />;
   }
 

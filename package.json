@@ -14,6 +14,7 @@
     "autoprefixer": "^10.4.2",
     "axios": "^1.6.8",
     "flowbite-react": "latest",
+    "my-app": "file:",
     "papaparse": "^5.4.1",
     "postcss": "^8.4.12",
     "react": "^18.2.0",
