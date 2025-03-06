@@ -113,13 +113,13 @@ export function ResultProvider({ children }: PropsWithChildren) {
         // Each line will be in the format of "amount username"
         const [amount, username] = line.split(" ");
 
-        // if invalid line, skip
-        if (!amount || !username) {
-          return;
-        }
-
         // find user_id from username
         const user = users.find((u) => u.email.includes(username));
+
+        // if invalid line, skip
+        if (!amount || !username || !user) {
+          return;
+        }
 
         // Create a transaction
         if (result.target === "account_balance") {
@@ -127,7 +127,7 @@ export function ResultProvider({ children }: PropsWithChildren) {
             (ab) =>
               ab.user_id === user?.id && ab.category_id === result.category_id
           );
-          
+
           if (!accountBalance && user) {
             accountBalance = await addAccountBalance({
               user_id: user?.id,
@@ -200,7 +200,7 @@ export function ResultProvider({ children }: PropsWithChildren) {
     oldTransactions.forEach((transaction) => {
       deleteTransaction(transaction);
     });
-    
+
     const { error } = await supabase
       .from("results")
       .delete()
@@ -222,6 +222,7 @@ export function ResultProvider({ children }: PropsWithChildren) {
       (transaction) => transaction.result_id === result.id
     );
 
+    console.log("Old transactions", oldTransactions);
     oldTransactions.forEach((transaction) => {
       deleteTransaction(transaction);
     });
@@ -231,15 +232,25 @@ export function ResultProvider({ children }: PropsWithChildren) {
 
     lines.forEach(async (line) => {
       // Each line will be in the format of "amount username"
-      const [amount, username] = line.split(" ");
+      var [amount, username] = line.split(" ");
 
-      // if invalid line, skip
-      if (!amount || !username) {
+      // Remove comma from amount
+      const amountRegex = /,/g;
+      amount = amount.replace(amountRegex, "");
+      amount = amount.replace(/\u2212/g, "-"); // Replace non-standard minus with standard hyphen
+
+      if (isNaN(parseFloat(amount))) {
+        console.error("Invalid amount", amount);
+        showAlert("Invalid amount", "error");
         return;
       }
-
       // find user_id from username
       const user = users.find((u) => u.email.includes(username));
+
+      // if invalid line, skip
+      if (!amount || !username || !user) {
+        return;
+      }
 
       // Create a transaction
       if (result.target === "account_balance") {
@@ -265,6 +276,7 @@ export function ResultProvider({ children }: PropsWithChildren) {
           type: amount.startsWith("-") ? "credit" : "debit",
           user_id: user?.id,
           category_id: result.category_id,
+          result_id: result.id,
           source: "RESULT",
         };
 
@@ -292,6 +304,7 @@ export function ResultProvider({ children }: PropsWithChildren) {
           user_id: user?.id,
           category_id: result.category_id,
           baki_id: baki?.id,
+          result_id: result.id,
           source: "RESULT",
         };
 

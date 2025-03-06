@@ -86,8 +86,11 @@ export function TransactionProvider({ children }: PropsWithChildren) {
   }, [showAlert]);
 
   const addTransaction = async (transaction: TransactionInsert) => {
-    console.log("Adding transaction", transaction)
-    console.log("Account balances", accountBalances)
+    if (transaction.user_id === "dd639c50-91d0-4eb8-8762-eafece6b0a8c") {
+      console.log("Amount", transaction.amount);
+    }
+    // console.log("Adding transaction", transaction)
+    // console.log("Account balances", accountBalances)
     // Check transaction.target and update the balance of the target
     if (transaction.target === "account_balance") {
       const accountBalance = accountBalances.find(
@@ -129,6 +132,7 @@ export function TransactionProvider({ children }: PropsWithChildren) {
 
     if (error) {
       console.error("Error adding transaction:", error);
+      console.log("Transaction", transaction);
       showAlert("Error adding transaction", "error");
       return;
     }
@@ -136,7 +140,7 @@ export function TransactionProvider({ children }: PropsWithChildren) {
 
   const deleteTransaction = async (transaction: Transaction) => {
     // Check transaction.target and update the balance of the target
-    console.log("Deleting transaction", transaction)
+    console.log("Deleting transaction", transaction);
     if (transaction.target === "account_balance") {
       const accountBalance = accountBalances.find(
         (ab) => ab.id === transaction.account_balance_id
@@ -156,7 +160,7 @@ export function TransactionProvider({ children }: PropsWithChildren) {
 
       updateAccountBalance(accountBalance);
 
-      console.log("Account balance updated", accountBalance)
+      console.log("Account balance updated", accountBalance);
     } else if (transaction.target === "baki") {
       const baki = bakis.find((baki) => baki.id === transaction.baki_id);
 

@@ -18,7 +18,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          balance?: number
+          balance: number
           category_id: number
           created_at?: string
           id?: string
@@ -39,13 +39,6 @@ export type Database = {
             referencedRelation: "categories"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "public_account_balance_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
         ]
       }
       bakis: {
@@ -57,7 +50,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          balance?: number
+          balance: number
           category_id: number
           created_at?: string
           id?: string
@@ -76,13 +69,6 @@ export type Database = {
             columns: ["category_id"]
             isOneToOne: false
             referencedRelation: "categories"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "baki_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -141,13 +127,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "notes_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "public_notes_category_id_fkey"
             columns: ["category_id"]
             isOneToOne: false
@@ -192,13 +171,6 @@ export type Database = {
             referencedRelation: "categories"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "results_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
         ]
       }
       transactions: {
@@ -206,7 +178,7 @@ export type Database = {
           account_balance_id: string | null
           amount: number
           baki_id: string | null
-          category_id: number | null
+          category_id: number
           created_at: string
           id: number
           note_id: string | null
@@ -214,13 +186,13 @@ export type Database = {
           source: string | null
           target: Database["public"]["Enums"]["transaction_target"]
           type: string
-          user_id: string | null
+          user_id: string
         }
         Insert: {
           account_balance_id?: string | null
-          amount?: number
+          amount: number
           baki_id?: string | null
-          category_id?: number | null
+          category_id: number
           created_at?: string
           id?: number
           note_id?: string | null
@@ -228,13 +200,13 @@ export type Database = {
           source?: string | null
           target: Database["public"]["Enums"]["transaction_target"]
           type: string
-          user_id?: string | null
+          user_id: string
         }
         Update: {
           account_balance_id?: string | null
           amount?: number
           baki_id?: string | null
-          category_id?: number | null
+          category_id?: number
           created_at?: string
           id?: number
           note_id?: string | null
@@ -242,7 +214,7 @@ export type Database = {
           source?: string | null
           target?: Database["public"]["Enums"]["transaction_target"]
           type?: string
-          user_id?: string | null
+          user_id?: string
         }
         Relationships: [
           {
@@ -280,13 +252,6 @@ export type Database = {
             referencedRelation: "results"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "transactions_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
         ]
       }
       user_details: {
@@ -308,15 +273,7 @@ export type Database = {
           role?: Database["public"]["Enums"]["user_role"]
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "userdetails_userid_fkey"
-            columns: ["user_id"]
-            isOneToOne: true
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
     }
     Views: {
@@ -415,4 +372,19 @@ export type Enums<
   ? Database[PublicEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : PublicEnumNameOrOptions extends keyof PublicSchema["Enums"]
     ? PublicSchema["Enums"][PublicEnumNameOrOptions]
+    : never
+
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof PublicSchema["CompositeTypes"]
+    | { schema: keyof Database },
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+    schema: keyof Database
+  }
+    ? keyof Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never = never,
+> = PublicCompositeTypeNameOrOptions extends { schema: keyof Database }
+  ? Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof PublicSchema["CompositeTypes"]
+    ? PublicSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never

@@ -1,15 +1,8 @@
 /* eslint-disable jsx-a11y/anchor-is-valid */
-import {
-  Breadcrumb,
-  Label,
-  Table,
-  TextInput
-} from "flowbite-react";
+import { Breadcrumb, Button, Label, Table, TextInput } from "flowbite-react";
 import type { FC } from "react";
 import React from "react";
-import {
-  HiHome
-} from "react-icons/hi";
+import { HiHome } from "react-icons/hi";
 import NavbarSidebarLayout from "../../layouts/navbar-sidebar";
 import LoadingPage from "../pages/loading";
 import { useResultContext, Results } from "../../context/ResultContext";
@@ -20,13 +13,19 @@ import EditResultModal from "./edit-result-modal";
 import DeleteResultModal from "./delete-result-modal";
 
 const ResultListPage: FC = function () {
-  const { results, loading } = useResultContext();
+  const { results, loading, updateResult } = useResultContext();
   const { users } = useUserContext();
   const [searchValue, setSearchValue] = React.useState("");
 
   if (loading) {
     return <LoadingPage />;
   }
+
+  const updateAllResults = async () => {
+    results.forEach(async (result) => {
+      await updateResult(result);
+    });
+  };
 
   return (
     <NavbarSidebarLayout>
@@ -63,7 +62,11 @@ const ResultListPage: FC = function () {
                 </div>
               </form>
             </div>
+
             <div className="ml-auto flex items-center space-x-2 sm:space-x-3">
+              {/* <Button color="primary" onClick={updateAllResults}>
+                Update All Results
+              </Button> */}
               <AddResultModal />
             </div>
           </div>
@@ -74,8 +77,13 @@ const ResultListPage: FC = function () {
           <div className="inline-block min-w-full align-middle">
             <div className="overflow-hidden shadow">
               {results.length > 0 ? (
-                <ResultsTable results={results.filter((result) => users.find((user) => user.id === result.user_id)?.email.includes(searchValue))} />
-
+                <ResultsTable
+                  results={results.filter((result) =>
+                    users
+                      .find((user) => user.id === result.user_id)
+                      ?.email.includes(searchValue)
+                  )}
+                />
               ) : (
                 <div className="p-4 text-center">No results found</div>
               )}
@@ -102,23 +110,30 @@ const ResultsTable: React.FC<Results> = function ({ results }) {
       </Table.Head>
       <Table.Body className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
         {results.map((result) => (
-          <Table.Row key={result.id} className="hover:bg-gray-100 dark:hover:bg-gray-700">
+          <Table.Row
+            key={result.id}
+            className="hover:bg-gray-100 dark:hover:bg-gray-700">
             <Table.Cell>{result.created_at.split("T")[0]}</Table.Cell>
-            <Table.Cell>{categories.find((category) => category.id === result.category_id)?.name}</Table.Cell>
+            <Table.Cell>
+              {
+                categories.find(
+                  (category) => category.id === result.category_id
+                )?.name
+              }
+            </Table.Cell>
             <Table.Cell>{result.target}</Table.Cell>
-            <Table.Cell>{result.result}</Table.Cell>           
+            <Table.Cell>{result.result}</Table.Cell>
             <Table.Cell>
               <div className="flex items-center gap-x-3 whitespace-nowrap">
                 <EditResultModal result={result} />
                 <DeleteResultModal result={result} />
               </div>
-            </Table.Cell>            
+            </Table.Cell>
           </Table.Row>
         ))}
       </Table.Body>
     </Table>
   );
 };
-
 
 export default ResultListPage;
