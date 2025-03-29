@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useEffect, useState, PropsWithChildren } from "react";
+import React, { createContext, useContext, useEffect, useState, PropsWithChildren, useCallback } from "react";
 import { supabase } from "../utils/supabaseClient";
 import { Database } from "../../database.types";
 import { useAlertContext } from "./AlertContext";
+import { useRealtimeSubscription } from "../utils/useRealtimeSubscription";
 
 export type Category = Database['public']['Tables']['categories']['Row'];
 export type Categories = { categories: Category[] };
@@ -9,9 +10,9 @@ export type CategoryInsert = Database['public']['Tables']['categories']['Insert'
 
 interface CategoryContextProps {
   categories: Category[];
-  addCategory: (category: CategoryInsert) => void;
-  deleteCategory: (category: Category) => void;
-  updateCategory: (category: Category) => void;
+  addCategory: (category: CategoryInsert) => Promise<void>;
+  deleteCategory: (category: Category) => Promise<void>;
+  updateCategory: (category: Category) => Promise<void>;
   loading: boolean;
 }
 
@@ -27,7 +28,7 @@ export function CategoryProvider({ children }: PropsWithChildren) {
       const { data: categories, error } = await supabase
         .from('categories')
         .select('*')
-        .order('id' , { ascending: false });
+        .order('id', { ascending: false });
 
       if (error) {
         console.error('Error fetching categories:', error);
@@ -39,44 +40,58 @@ export function CategoryProvider({ children }: PropsWithChildren) {
     };
 
     fetchCategories();
-
-    const handleChanges = (payload: any) => {
-      if (payload.eventType === 'INSERT') {
-        setCategories(prev => [payload.new, ...prev]);
-      } else if (payload.eventType === 'UPDATE') {
-        setCategories(prev => prev.map(category => category.id === payload.new.id ? payload.new : category));
-      } else if (payload.eventType === 'DELETE') {
-        setCategories(prev => prev.filter(category => category.id !== payload.old.id));
-      }
-    };
-
-    const subscription = supabase
-      .channel('categories')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, payload => {
-        handleChanges(payload);
-      })
-      .subscribe();
-
-    setLoading(false);
-
-    return () => {
-      subscription.unsubscribe();
-    };
   }, [showAlert]);
 
-  const addCategory = async (category: CategoryInsert) => {
-    const { error } = await supabase
+  const handleRealtimeChanges = useCallback((payload: { eventType: string; new: Category; old: Category }) => {
+    setCategories(prev => {
+      switch (payload.eventType) {
+        case 'INSERT':
+          return [payload.new, ...prev];
+        case 'UPDATE':
+          return prev.map(category => category.id === payload.new.id ? payload.new : category);
+        case 'DELETE':
+          return prev.filter(category => category.id !== payload.old.id);
+        default:
+          return prev;
+      }
+    });
+  }, []);
+
+  const trackOperation = useRealtimeSubscription<Category>(
+    { table: "categories" },
+    handleRealtimeChanges
+  );
+
+  const addCategory = useCallback(async (category: CategoryInsert) => {
+    const { data, error } = await supabase
       .from('categories')
-      .insert(category);
+      .insert(category)
+      .select()
+      .single();
 
     if (error) {
       console.error('Error adding category:', error);
       showAlert('Error adding category', 'error');
       return;
     }
-  };
 
-  const deleteCategory = async (category: Category) => {
+    if (data) {
+      trackOperation({
+        id: data.id,
+        type: "INSERT",
+        timestamp: Date.now(),
+        data
+      });
+    }
+  }, [showAlert, trackOperation]);
+
+  const deleteCategory = useCallback(async (category: Category) => {
+    trackOperation({
+      id: category.id,
+      type: "DELETE",
+      timestamp: Date.now()
+    });
+
     const { error } = await supabase
       .from('categories')
       .delete()
@@ -85,11 +100,17 @@ export function CategoryProvider({ children }: PropsWithChildren) {
     if (error) {
       console.error('Error deleting category:', error);
       showAlert('Error deleting category', 'error');
-      return;
     }
-  };
+  }, [showAlert, trackOperation]);
 
-  const updateCategory = async (category: Category) => {
+  const updateCategory = useCallback(async (category: Category) => {
+    trackOperation({
+      id: category.id,
+      type: "UPDATE",
+      timestamp: Date.now(),
+      data: category
+    });
+
     const { error } = await supabase
       .from('categories')
       .update(category)
@@ -98,12 +119,19 @@ export function CategoryProvider({ children }: PropsWithChildren) {
     if (error) {
       console.error('Error updating category:', error);
       showAlert('Error updating category', 'error');
-      return;
     }
+  }, [showAlert, trackOperation]);
+
+  const value = {
+    categories,
+    addCategory,
+    deleteCategory,
+    updateCategory,
+    loading,
   };
 
   return (
-    <CategoryContext.Provider value={{ categories, addCategory, deleteCategory, updateCategory, loading }}>
+    <CategoryContext.Provider value={value}>
       {children}
     </CategoryContext.Provider>
   );

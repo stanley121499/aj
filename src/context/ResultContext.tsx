@@ -4,24 +4,29 @@ import React, {
   useEffect,
   useState,
   PropsWithChildren,
+  useMemo,
+  useCallback,
 } from "react";
 import { supabase } from "../utils/supabaseClient";
 import { Database } from "../../database.types";
 import { useAlertContext } from "./AlertContext";
-import { TransactionInsert, useTransactionContext } from "./TransactionContext";
+import { useTransactionContext, Transaction } from "./TransactionContext";
 import { useUserContext } from "./UserContext";
 import { useBakiContext } from "./BakiContext";
 import { useAccountBalanceContext } from "./AccountBalanceContext";
+import { parseResultLines } from "../utils/resultParser";
+import { createTransactionFromResult } from "../utils/transactionCreator";
+import { useRealtimeSubscription } from "../utils/useRealtimeSubscription";
 
 export type Result = Database["public"]["Tables"]["results"]["Row"];
 export type Results = { results: Result[] };
 export type ResultInsert = Database["public"]["Tables"]["results"]["Insert"];
 
 interface ResultContextProps {
-  results: Result[];
-  addResult: (result: ResultInsert) => void;
-  deleteResult: (result: Result) => void;
-  updateResult: (result: Result) => void;
+  results: readonly Result[];
+  addResult: (result: ResultInsert) => Promise<void>;
+  deleteResult: (result: Result) => Promise<void>;
+  updateResult: (result: Result) => Promise<void>;
   loading: boolean;
 }
 
@@ -31,11 +36,10 @@ export function ResultProvider({ children }: PropsWithChildren) {
   const [results, setResults] = useState<Result[]>([]);
   const [loading, setLoading] = useState(true);
   const { showAlert } = useAlertContext();
-  const { addTransaction, transactions, deleteTransaction } =
-    useTransactionContext();
+  const { addTransaction, transactions, deleteTransaction } = useTransactionContext();
   const { users } = useUserContext();
-  const { bakis, addBaki } = useBakiContext();
-  const { accountBalances, addAccountBalance } = useAccountBalanceContext();
+  const { getOrCreateBaki } = useBakiContext();
+  const { getOrCreateAccountBalance } = useAccountBalanceContext();
 
   useEffect(() => {
     const fetchResults = async () => {
@@ -54,281 +58,285 @@ export function ResultProvider({ children }: PropsWithChildren) {
     };
 
     fetchResults();
-
-    const handleChanges = (payload: any) => {
-      if (payload.eventType === "INSERT") {
-        setResults((prev) => [payload.new, ...prev]);
-      } else if (payload.eventType === "UPDATE") {
-        setResults((prev) =>
-          prev.map((result) =>
-            result.id === payload.new.id ? payload.new : result
-          )
-        );
-      } else if (payload.eventType === "DELETE") {
-        setResults((prev) =>
-          prev.filter((result) => result.id !== payload.old.id)
-        );
-      }
-    };
-
-    const subscription = supabase
-      .channel("results")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "results" },
-        (payload) => {
-          handleChanges(payload);
-        }
-      )
-      .subscribe();
-
-    setLoading(false);
-    return () => {
-      subscription.unsubscribe();
-    };
   }, [showAlert]);
 
-  const addResult = async (result: ResultInsert) => {
-    setLoading(true);
+  const handleRealtimeChanges = useCallback((payload: { eventType: string; new: Result; old: Result }) => {
+    setResults(prev => {
+      switch (payload.eventType) {
+        case 'INSERT':
+          return [payload.new, ...prev];
+        case 'UPDATE':
+          return prev.map(result => result.id === payload.new.id ? payload.new : result);
+        case 'DELETE':
+          return prev.filter(result => result.id !== payload.old.id);
+        default:
+          return prev;
+      }
+    });
+  }, []);
 
-    const { data, error } = await supabase
-      .from("results")
-      .insert(result)
-      .select("*")
-      .single();
+  const trackOperation = useRealtimeSubscription<Result>(
+    { table: "results" },
+    handleRealtimeChanges
+  );
 
-    if (error) {
-      console.error("Error adding result:", error);
-      showAlert("Error adding result", "error");
-      setLoading(false);
-      return;
+  const processResult = useCallback(async (result: ResultInsert, resultId: number): Promise<void> => {
+    if (!result.result || !result.category_id || !result.target) {
+      throw new Error("Missing required result fields");
     }
 
-    if (data) {
-      const resultId = data.id;
-      // Process Result to add Transaction, check line by line for result.result and create a transaction
-      const lines = result.result.split("\n");
+    const parsedLines = parseResultLines(result.result);
+    console.log("Processing result lines:", parsedLines);
+    console.log("Total users available:", users.length);
 
-      lines.forEach(async (line) => {
-        // Each line will be in the format of "amount username"
-        const [amount, username] = line.split(" ");
+    // Get fresh account balances before processing
+    const { data: freshAccountBalances, error: balanceError } = await supabase
+      .from("account_balances")
+      .select("*");
 
-        // find user_id from username
-        const user = users.find((u) => u.email.includes(username));
+    if (balanceError) {
+      console.error("Error fetching fresh account balances:", balanceError);
+      throw balanceError;
+    }
 
-        // if invalid line, skip
-        if (!amount || !username || !user) {
-          return;
-        }
+    // Get fresh bakis before processing
+    const { data: freshBakis, error: bakiError } = await supabase
+      .from("bakis")
+      .select("*");
 
-        // Create a transaction
-        if (result.target === "account_balance") {
-          let accountBalance = accountBalances.find(
-            (ab) =>
-              ab.user_id === user?.id && ab.category_id === result.category_id
-          );
+    if (bakiError) {
+      console.error("Error fetching fresh bakis:", bakiError);
+      throw bakiError;
+    }
 
-          if (!accountBalance && user) {
-            accountBalance = await addAccountBalance({
-              user_id: user?.id,
-              category_id: result.category_id,
-              balance: 0,
-            });
-          }
+    console.log("Fresh balances fetched:", {
+      accountBalances: freshAccountBalances?.length,
+      bakis: freshBakis?.length
+    });
 
-          const transaction: TransactionInsert = {
-            amount: amount.startsWith("-")
-              ? parseFloat(amount)
-              : parseFloat(amount) * -1,
-            target: "account_balance",
-            account_balance_id: accountBalance?.id,
-            type: amount.startsWith("-") ? "credit" : "debit",
-            user_id: user?.id,
-            category_id: result.category_id,
-            source: "RESULT",
-            result_id: resultId,
-          };
-
-          console.log("Adding transaction", transaction);
-
-          addTransaction(transaction);
-        } else if (result.target === "baki") {
-          let baki = bakis.find(
-            (baki) =>
-              baki.user_id === user?.id &&
-              baki.category_id === result.category_id
-          );
-
-          if (!baki && user) {
-            baki = await addBaki({
-              user_id: user?.id,
-              category_id: result.category_id,
-              balance: 0,
-            });
-          }
-
-          const transaction: TransactionInsert = {
-            amount: amount.startsWith("-")
-              ? parseFloat(amount)
-              : parseFloat(amount) * -1,
-            target: "baki",
-            type: amount.startsWith("-") ? "credit" : "debit",
-            user_id: user?.id,
-            baki_id: baki?.id,
-            category_id: result.category_id,
-            source: "RESULT",
-            result_id: resultId,
-          };
-
-          addTransaction(transaction);
-
-          console.log("Adding Baki transaction", transaction);
-        }
+    for (const parsedLine of parsedLines) {
+      console.log("\nProcessing line:", parsedLine);
+      
+      // Find user by username (email without @fruitcalculator.com)
+      const user = users.find((u) => {
+        const emailUsername = u.email.split("@")[0].toLowerCase();
+        const parsedUsername = parsedLine.username.toLowerCase();
+        return emailUsername === parsedUsername;
       });
-    }
-    setLoading(false);
-  };
 
-  const deleteResult = async (result: Result) => {
-    setLoading(true);
-
-    // Find all the old transactions and delete them
-    const oldTransactions = transactions.filter(
-      (transaction) => transaction.result_id === result.id
-    );
-
-    oldTransactions.forEach((transaction) => {
-      deleteTransaction(transaction);
-    });
-
-    const { error } = await supabase
-      .from("results")
-      .delete()
-      .eq("id", result.id);
-
-    if (error) {
-      console.error("Error deleting result:", error);
-      showAlert("Error deleting result", "error");
-      return;
-    }
-    setLoading(false);
-  };
-
-  const updateResult = async (result: Result) => {
-    setLoading(true);
-
-    // Find all the old transactions and delete them
-    const oldTransactions = transactions.filter(
-      (transaction) => transaction.result_id === result.id
-    );
-
-    console.log("Old transactions", oldTransactions);
-    oldTransactions.forEach((transaction) => {
-      deleteTransaction(transaction);
-    });
-
-    // Process Result to add Transaction, check line by line for result.result and create a transaction
-    const lines = result.result.split("\n");
-
-    lines.forEach(async (line) => {
-      // Each line will be in the format of "amount username"
-      var [amount, username] = line.split(" ");
-
-      // Remove comma from amount
-      const amountRegex = /,/g;
-      amount = amount.replace(amountRegex, "");
-      amount = amount.replace(/\u2212/g, "-"); // Replace non-standard minus with standard hyphen
-
-      if (isNaN(parseFloat(amount))) {
-        console.error("Invalid amount", amount);
-        showAlert("Invalid amount", "error");
-        return;
-      }
-      // find user_id from username
-      const user = users.find((u) => u.email.includes(username));
-
-      // if invalid line, skip
-      if (!amount || !username || !user) {
-        return;
+      if (!user) {
+        console.log("User lookup failed for:", parsedLine.username);
+        console.log("Available usernames:", users.map(u => ({
+          username: u.email.split("@")[0].toLowerCase(),
+          fullEmail: u.email
+        })));
+        throw new Error(`User not found: ${parsedLine.username}`);
       }
 
-      // Create a transaction
+      console.log("Found user:", {
+        id: user.id,
+        email: user.email,
+        username: user.email.split("@")[0]
+      });
+
+      // Get or create the appropriate balance using fresh data
       if (result.target === "account_balance") {
-        let accountBalance = accountBalances.find(
-          (ab) =>
-            ab.user_id === user?.id && ab.category_id === result.category_id
+        console.log("Processing account balance for user:", user.id);
+        let accountBalance = freshAccountBalances?.find(
+          ab => ab.user_id === user.id && ab.category_id === result.category_id
         );
 
-        if (!accountBalance && user) {
-          accountBalance = await addAccountBalance({
-            user_id: user?.id,
-            category_id: result.category_id,
-            balance: 0,
-          });
+        if (!accountBalance) {
+          accountBalance = await getOrCreateAccountBalance(
+            user.id,
+            result.category_id
+          );
         }
 
-        const transaction: TransactionInsert = {
-          amount: amount.startsWith("-")
-            ? parseFloat(amount)
-            : parseFloat(amount) * -1,
-          target: "account_balance",
-          account_balance_id: accountBalance?.id,
-          type: amount.startsWith("-") ? "credit" : "debit",
-          user_id: user?.id,
-          category_id: result.category_id,
-          result_id: result.id,
-          source: "RESULT",
-        };
+        console.log("Using account balance:", {
+          id: accountBalance.id,
+          userId: accountBalance.user_id,
+          categoryId: accountBalance.category_id,
+          balance: accountBalance.balance
+        });
 
-        addTransaction(transaction);
+        const transaction = createTransactionFromResult(
+          parsedLine,
+          user.id,
+          result.category_id,
+          "account_balance",
+          resultId,
+          accountBalance
+        );
+
+        await addTransaction(transaction);
       } else if (result.target === "baki") {
-        let baki = bakis.find(
-          (baki) =>
-            baki.user_id === user?.id && baki.category_id === result.category_id
+        console.log("Processing baki for user:", user.id);
+        let baki = freshBakis?.find(
+          b => b.user_id === user.id && b.category_id === result.category_id
         );
 
-        if (!baki && user) {
-          baki = await addBaki({
-            user_id: user?.id,
-            category_id: result.category_id,
-            balance: 0,
-          });
+        if (!baki) {
+          baki = await getOrCreateBaki(
+            user.id,
+            result.category_id
+          );
         }
 
-        const transaction: TransactionInsert = {
-          amount: amount.startsWith("-")
-            ? parseFloat(amount)
-            : parseFloat(amount) * -1,
-          target: "baki",
-          type: amount.startsWith("-") ? "credit" : "debit",
-          user_id: user?.id,
-          category_id: result.category_id,
-          baki_id: baki?.id,
-          result_id: result.id,
-          source: "RESULT",
-        };
+        console.log("Using baki:", {
+          id: baki.id,
+          userId: baki.user_id,
+          categoryId: baki.category_id,
+          balance: baki.balance
+        });
 
-        addTransaction(transaction);
+        const transaction = createTransactionFromResult(
+          parsedLine,
+          user.id,
+          result.category_id,
+          "baki",
+          resultId,
+          undefined,
+          baki
+        );
+
+        await addTransaction(transaction);
       }
-    });
-
-    const { error } = await supabase
-      .from("results")
-      .update(result)
-      .eq("id", result.id);
-
-    if (error) {
-      console.error("Error updating result:", error);
-      showAlert("Error updating result", "error");
-      return;
     }
+  }, [addTransaction, getOrCreateAccountBalance, getOrCreateBaki, users]);
 
-    setLoading(false);
-  };
+  const addResult = useCallback(async (result: ResultInsert) => {
+    setLoading(true);
+    let createdResult: Result | null = null;
+
+    try {
+      const { data, error } = await supabase
+        .from("results")
+        .insert(result)
+        .select("*")
+        .single();
+
+      if (error) throw error;
+      if (!data) throw new Error("No data returned from insert");
+
+      createdResult = data;
+      if (!createdResult) throw new Error("Failed to create result");
+
+      trackOperation({
+        id: createdResult.id,
+        type: "INSERT",
+        timestamp: Date.now(),
+        data: createdResult
+      });
+
+      await processResult(result, createdResult.id);
+      showAlert("Result processed successfully", "success");
+    } catch (error) {
+      console.error("Error adding result:", error);
+      showAlert(error instanceof Error ? error.message : "Error adding result", "error");
+      
+      if (createdResult?.id) {
+        await supabase.from("results").delete().eq("id", createdResult.id);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [processResult, showAlert, trackOperation]);
+
+  const deleteResult = useCallback(async (result: Result) => {
+    setLoading(true);
+
+    try {
+      const oldTransactions = transactions.filter(
+        (transaction) => transaction.result_id === result.id
+      );
+
+      for (const transaction of oldTransactions) {
+        await deleteTransaction(transaction);
+      }
+
+      trackOperation({
+        id: result.id,
+        type: "DELETE",
+        timestamp: Date.now()
+      });
+
+      const { error } = await supabase
+        .from("results")
+        .delete()
+        .eq("id", result.id);
+
+      if (error) throw error;
+
+      showAlert("Result and associated transactions deleted successfully", "success");
+    } catch (error) {
+      console.error("Error deleting result:", error);
+      showAlert(error instanceof Error ? error.message : "Error deleting result", "error");
+    } finally {
+      setLoading(false);
+    }
+  }, [transactions, deleteTransaction, showAlert, trackOperation]);
+
+  const updateResult = useCallback(async (result: Result) => {
+    setLoading(true);
+    let originalTransactions: Transaction[] = [];
+
+    try {
+      originalTransactions = transactions.filter(
+        (transaction) => transaction.result_id === result.id
+      );
+
+      // Delete transactions without updating balances since we're reprocessing
+      for (const transaction of originalTransactions) {
+        await deleteTransaction(transaction);
+      }
+
+      trackOperation({
+        id: result.id,
+        type: "UPDATE",
+        timestamp: Date.now(),
+        data: result
+      });
+
+      await processResult(result, result.id);
+
+      const { error } = await supabase
+        .from("results")
+        .update(result)
+        .eq("id", result.id);
+
+      if (error) throw error;
+
+      showAlert("Result updated successfully", "success");
+    } catch (error) {
+      console.error("Error updating result:", error);
+      showAlert(error instanceof Error ? error.message : "Error updating result", "error");
+      
+      if (originalTransactions.length > 0) {
+        for (const transaction of originalTransactions) {
+          try {
+            await addTransaction(transaction);
+          } catch (restoreError) {
+            console.error("Error restoring transaction:", restoreError);
+            showAlert("Error restoring original state. Please check balances.", "error");
+          }
+        }
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [transactions, processResult, showAlert, deleteTransaction, addTransaction, trackOperation]);
+
+  const value = useMemo(() => ({
+    results,
+    addResult,
+    deleteResult,
+    updateResult,
+    loading,
+  }), [results, addResult, deleteResult, updateResult, loading]);
 
   return (
-    <ResultContext.Provider
-      value={{ results, addResult, deleteResult, updateResult, loading }}>
+    <ResultContext.Provider value={value}>
       {children}
     </ResultContext.Provider>
   );

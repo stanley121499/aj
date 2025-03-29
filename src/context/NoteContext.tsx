@@ -4,17 +4,18 @@ import React, {
   useEffect,
   useState,
   PropsWithChildren,
+  useMemo,
+  useCallback,
 } from "react";
 import { supabase } from "../utils/supabaseClient";
 import { Database } from "../../database.types";
 import { useAlertContext } from "./AlertContext";
-import {
-  useAccountBalanceContext,
-  AccountBalanceInsert,
-} from "./AccountBalanceContext";
-import { useUserContext } from "./UserContext";
-import { useTransactionContext, TransactionInsert } from "./TransactionContext";
-import { useBakiContext, BakiInsert } from "./BakiContext";
+import { useAccountBalanceContext } from "./AccountBalanceContext";
+import { useBakiContext } from "./BakiContext";
+import { useUserContext, User } from "./UserContext";
+import { useTransactionContext } from "./TransactionContext";
+import { createBalanceTransaction, createBakiTransaction, validateNote } from "../utils/noteUtils";
+import { useRealtimeSubscription } from "../utils/useRealtimeSubscription";
 
 export type Note = Database["public"]["Tables"]["notes"]["Row"];
 export type Notes = { notes: Note[] };
@@ -22,17 +23,28 @@ export type NoteInsert = Database["public"]["Tables"]["notes"]["Insert"];
 
 interface NoteContextProps {
   notes: Note[];
-  addNote: (note: NoteInsert) => void;
-  deleteNote: (note: Note) => void;
-  updateNote: (note: Note) => void;
-  approveNote: (note: Note) => void;
-  rejectNote: (note: Note) => void;
+  addNote: (note: NoteInsert) => Promise<void>;
+  deleteNote: (note: Note) => Promise<void>;
+  updateNote: (note: Note) => Promise<void>;
+  approveNote: (note: Note) => Promise<void>;
+  rejectNote: (note: Note) => Promise<void>;
   loading: boolean;
 }
 
 const NoteContext = createContext<NoteContextProps>(undefined!);
 
-export function NoteProvider({ children }: PropsWithChildren) {
+type AlertType = "error" | "info" | "success" | "warning";
+
+const handleNoteError = (
+  error: unknown,
+  operation: string,
+  showAlert: (message: string, type: AlertType) => void
+): void => {
+  console.error(`Error ${operation}:`, error);
+  showAlert(`Error ${operation}`, "error");
+};
+
+export function NoteProvider({ children }: Readonly<PropsWithChildren>) {
   const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(true);
   const { showAlert } = useAlertContext();
@@ -43,206 +55,216 @@ export function NoteProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     const fetchNotes = async () => {
-      const { data: notes, error } = await supabase
+      const { data: fetchedNotes, error } = await supabase
         .from("notes")
         .select("*")
         .order("created_at", { ascending: false });
 
       if (error) {
-        console.error("Error fetching notes:", error);
-        showAlert("Error fetching notes", "error");
+        handleNoteError(error, "fetching notes", showAlert);
       }
 
-      setNotes(notes || []);
+      setNotes(fetchedNotes || []);
       setLoading(false);
     };
 
     fetchNotes();
-
-    const handleChanges = (payload: any) => {
-      if (payload.eventType === "INSERT") {
-        setNotes((prev) => [payload.new, ...prev]);
-      } else if (payload.eventType === "UPDATE") {
-        setNotes((prev) =>
-          prev.map((note) => (note.id === payload.new.id ? payload.new : note))
-        );
-      } else if (payload.eventType === "DELETE") {
-        setNotes((prev) => prev.filter((note) => note.id !== payload.old.id));
-      }
-    };
-
-    const subscription = supabase
-      .channel("notes")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "notes" },
-        (payload) => {
-          handleChanges(payload);
-        }
-      )
-      .subscribe();
-
-    setLoading(false);
-
-    return () => {
-      subscription.unsubscribe();
-    };
   }, [showAlert]);
 
-  const addNote = async (note: NoteInsert) => {
-    const { error } = await supabase.from("notes").insert(note);
+  const handleRealtimeChanges = useCallback((payload: { eventType: string; new: Note; old: Note }) => {
+    setNotes(prev => {
+      switch (payload.eventType) {
+        case 'INSERT':
+          return [payload.new, ...prev];
+        case 'UPDATE':
+          return prev.map(note => note.id === payload.new.id ? payload.new : note);
+        case 'DELETE':
+          return prev.filter(note => note.id !== payload.old.id);
+        default:
+          return prev;
+      }
+    });
+  }, []);
 
-    if (error) {
-      console.error("Error adding note:", error);
-      showAlert("Error adding note", "error");
-      return;
+  const trackOperation = useRealtimeSubscription<Note>(
+    { table: "notes" },
+    handleRealtimeChanges
+  );
+
+  const addNote = useCallback(async (note: NoteInsert) => {
+    try {
+      const { data, error } = await supabase
+        .from("notes")
+        .insert(note)
+        .select()
+        .single();
+
+      if (error) {
+        handleNoteError(error, "adding note", showAlert);
+        return;
+      }
+
+      if (data) {
+        trackOperation({
+          id: data.id,
+          type: "INSERT",
+          timestamp: Date.now(),
+          data
+        });
+      }
+    } catch (error) {
+      handleNoteError(error, "adding note", showAlert);
     }
-  };
+  }, [showAlert, trackOperation]);
 
-  const deleteNote = async (note: Note) => {
-    const { error } = await supabase.from("notes").delete().eq("id", note.id);
+  const deleteNote = useCallback(async (note: Note) => {
+    try {
+      trackOperation({
+        id: note.id,
+        type: "DELETE",
+        timestamp: Date.now()
+      });
 
-    if (error) {
-      console.error("Error deleting note:", error);
-      showAlert("Error deleting note", "error");
-      return;
+      const { error } = await supabase
+        .from("notes")
+        .delete()
+        .eq("id", note.id);
+
+      if (error) {
+        handleNoteError(error, "deleting note", showAlert);
+      }
+    } catch (error) {
+      handleNoteError(error, "deleting note", showAlert);
     }
-  };
+  }, [showAlert, trackOperation]);
 
-  const updateNote = async (note: Note) => {
-    const { error } = await supabase
-      .from("notes")
-      .update(note)
-      .eq("id", note.id);
+  const updateNote = useCallback(async (note: Note) => {
+    try {
+      trackOperation({
+        id: note.id,
+        type: "UPDATE",
+        timestamp: Date.now(),
+        data: note
+      });
 
-    if (error) {
-      console.error("Error updating note:", error);
-      showAlert("Error updating note", "error");
-      return;
+      const { error } = await supabase
+        .from("notes")
+        .update(note)
+        .eq("id", note.id);
+
+      if (error) {
+        handleNoteError(error, "updating note", showAlert);
+      }
+    } catch (error) {
+      handleNoteError(error, "updating note", showAlert);
     }
-  };
+  }, [showAlert, trackOperation]);
 
-  const approveNote = async (note: Note) => {
-    const user = users.find((user) => user.id === note.user_id);
+  const handleAccountBalanceNote = useCallback(async (user: User, note: Note) => {
+    let accountBalance = accountBalances.find(
+      (ab) => ab.user_id === user.id && ab.category_id === note.category_id
+    );
+
+    if (!accountBalance) {
+      const newBalance = await addAccountBalance({
+        user_id: user.id,
+        category_id: note.category_id,
+        balance: 0,
+      });
+      
+      if (!newBalance) {
+        throw new Error("Failed to create account balance");
+      }
+      accountBalance = newBalance;
+    }
+
+    const transaction = createBalanceTransaction(user, note, accountBalance);
+    await addTransaction(transaction);
+  }, [accountBalances, addAccountBalance, addTransaction]);
+
+  const handleBakiNote = useCallback(async (user: User, note: Note) => {
+    let baki = bakis.find(
+      (b) => b.user_id === user.id && b.category_id === note.category_id
+    );
+
+    if (!baki) {
+      const newBaki = await addBaki({
+        user_id: user.id,
+        category_id: note.category_id,
+        balance: 0,
+      });
+      
+      if (!newBaki) {
+        throw new Error("Failed to create baki");
+      }
+      baki = newBaki;
+    }
+
+    const transaction = createBakiTransaction(user, note, baki);
+    await addTransaction(transaction);
+  }, [bakis, addBaki, addTransaction]);
+
+  const approveNote = useCallback(async (note: Note) => {
+    const user = users.find((u) => u.id === note.user_id);
 
     if (!user) {
-      console.error("User not found");
       showAlert("User not found", "error");
       return;
     }
 
-    if (note.target === "account_balance") {
-      let accountBalance = accountBalances.find(
-        (ab) => ab.user_id === user.id && ab.category_id === note.category_id
-      );
-      console.log("Account balance", accountBalance);
-      if (!accountBalance) {
-        // Create a new account balance
-        const accountBalanceInsert: AccountBalanceInsert = {
-          user_id: user.id,
-          category_id: note.category_id,
-          balance: 0,
-        };
+    try {
+      validateNote(note);
 
-        addAccountBalance(accountBalanceInsert).then((ab) => {
-          if (ab) {
-            console.log("Account balance created", ab);
-            const transaction: TransactionInsert = {
-              user_id: user.id,
-              account_balance_id: ab.id,
-              amount: note.amount,
-              type: "debit",
-              target: note.target,
-              category_id: note.category_id,
-              source: "NOTE",
-            };
-
-            addTransaction(transaction);
-            console.log("Transaction created", transaction);
-          }
-        });
-      } else {
-        const transaction: TransactionInsert = {
-          user_id: user.id,
-          account_balance_id: accountBalance.id,
-          amount: note.amount,
-          type: "debit",
-          target: note.target,
-          category_id: note.category_id,
-          source: "NOTE",
-        };
-        addTransaction(transaction);
+      if (note.target === "account_balance") {
+        await handleAccountBalanceNote(user, note);
+      } else if (note.target === "baki") {
+        await handleBakiNote(user, note);
       }
-    } else if (note.target === "baki") {
-      const baki = bakis.find(
-        (baki) =>
-          baki.user_id === user.id && baki.category_id === note.category_id
-      );
 
-      if (!baki) {
-        // Create a new baki
-        const bakiInsert: BakiInsert = {
-          user_id: user.id,
-          category_id: note.category_id,
-          balance: 0,
-        };
+      await updateNote({
+        ...note,
+        status: "APPROVED",
+      });
 
-        addBaki(bakiInsert).then((baki) => {
-          if (baki) {
-            console.log("Baki created", baki);
-            const transaction: TransactionInsert = {
-              user_id: user.id,
-              baki_id: baki.id,
-              amount: note.amount,
-              type: "debit",
-              target: note.target,
-              category_id: note.category_id,
-              source: "NOTE",
-            };
-
-            addTransaction(transaction);
-            console.log("Transaction created", transaction);
-          }
-        });
-      } else {
-        const transaction: TransactionInsert = {
-          user_id: user.id,
-          baki_id: baki.id,
-          amount: note.amount,
-          type: "debit",
-          target: note.target,
-          category_id: note.category_id,
-          source: "NOTE",
-        };
-
-        addTransaction(transaction);
-      }
+      showAlert("Note approved successfully", "success");
+    } catch (error) {
+      handleNoteError(error, "approving note", showAlert);
+      throw error;
     }
+  }, [users, showAlert, handleAccountBalanceNote, handleBakiNote, updateNote]);
 
-    await updateNote({
-      ...note,
-      status: "APPROVED",
-    });
-  };
+  const rejectNote = useCallback(async (note: Note) => {
+    try {
+      await updateNote({
+        ...note,
+        status: "REJECTED",
+      });
+      showAlert("Note rejected successfully", "success");
+    } catch (error) {
+      handleNoteError(error, "rejecting note", showAlert);
+    }
+  }, [updateNote, showAlert]);
 
-  const rejectNote = async (note: Note) => {
-    await updateNote({
-      ...note,
-      status: "REJECTED",
-    });
-  };
+  const value = useMemo(() => ({
+    notes,
+    addNote,
+    deleteNote,
+    updateNote,
+    approveNote,
+    rejectNote,
+    loading,
+  }), [
+    notes,
+    addNote,
+    deleteNote,
+    updateNote,
+    approveNote,
+    rejectNote,
+    loading,
+  ]);
 
   return (
-    <NoteContext.Provider
-      value={{
-        notes,
-        addNote,
-        deleteNote,
-        updateNote,
-        approveNote,
-        loading,
-        rejectNote,
-      }}>
+    <NoteContext.Provider value={value}>
       {children}
     </NoteContext.Provider>
   );

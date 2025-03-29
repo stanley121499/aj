@@ -1,11 +1,12 @@
 /* eslint-disable jsx-a11y/anchor-is-valid */
 import { Button, Label, Modal, TextInput } from "flowbite-react";
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import { HiOutlinePencilAlt } from "react-icons/hi";
 import { useAlertContext } from "../../context/AlertContext";
 import { User } from "../../context/UserContext";
 import { useCategoryContext } from "../../context/CategoryContext";
 import { useTransactionContext } from "../../context/TransactionContext";
+import { supabase } from "../../utils/supabaseClient";
 
 // Defining props type
 interface UpdateUserBalanceModalProps {
@@ -19,61 +20,98 @@ const UpdateUserBalanceModal: React.FC<UpdateUserBalanceModalProps> = ({
   const { showAlert } = useAlertContext();
   const [userData, setUserData] = useState<User>(user);
   const [initialUserData] = useState<User>(user);
+  const [isUpdating, setIsUpdating] = useState(false);
   const { categories } = useCategoryContext();
   const { addTransaction } = useTransactionContext();
 
-  const handleUpdateBalance = async () => {
-    // Find the difference the create Transaction for the difference
-    const newUserData = { ...userData };
-    const initialUserDatas = { ...initialUserData };
-    const newBaki = newUserData.baki;
-    const newAccountBalance = newUserData.account_balance;
-    const initialBaki = initialUserDatas.baki;
-    const initialAccountBalance = initialUserDatas.account_balance;
+  const handleUpdateBalance = useCallback(async () => {
+    try {
+      setIsUpdating(true);
+      const newUserData = { ...userData };
+      const initialUserDatas = { ...initialUserData };
+      const newBaki = newUserData.baki;
+      const newAccountBalance = newUserData.account_balance;
+      const initialBaki = initialUserDatas.baki;
+      const initialAccountBalance = initialUserDatas.account_balance;
 
-    // Update balances for all bakis and account balances
-    newBaki.forEach((baki) => {
-      const initialBakiBalance =
-        initialBaki.find((el) => el.id === baki.id)?.balance || 0;
-      if (baki.balance !== initialBakiBalance) {
-        const difference = baki.balance - initialBakiBalance;
-        addTransaction({
-          user_id: user.id,
-          category_id: baki.category_id,
-          amount: difference,
-          target: "baki",
-          source: "PAYOUT",
-          type: difference < 0 ? "debit" : "credit",
-          baki_id: baki.id,
-        });
+      // Process bakis
+      for (const baki of newBaki) {
+        const initialBakiBalance = initialBaki.find((el) => el.id === baki.id)?.balance || 0;
+        if (baki.balance !== initialBakiBalance) {
+          // For PAYOUT: If initial balance is negative (boss owes), we need to add positive amount
+          // If initial balance is positive (user owes), we need to subtract
+          const difference = baki.balance - initialBakiBalance;
+          
+          // Fetch fresh baki data before creating transaction
+          const { data: freshBaki, error: bakiError } = await supabase
+            .from("bakis")
+            .select("*")
+            .eq("id", baki.id)
+            .single();
+
+          if (bakiError) {
+            throw new Error(`Failed to fetch fresh baki data: ${bakiError.message}`);
+          }
+
+          if (freshBaki) {
+            await addTransaction({
+              user_id: user.id,
+              category_id: baki.category_id,
+              amount: Math.abs(difference),
+              target: "baki",
+              source: "PAYOUT",
+              type: "debit",
+              baki_id: baki.id,
+            });
+          }
+        }
       }
-    });
 
-    newAccountBalance.forEach((account_balance) => {
-      const initialAccountBalanceBalance =
-        initialAccountBalance.find((el) => el.id === account_balance.id)
-          ?.balance || 0;
-      if (account_balance.balance !== initialAccountBalanceBalance) {
-        const difference =
-          account_balance.balance - initialAccountBalanceBalance;
-        addTransaction({
-          user_id: user.id,
-          category_id: account_balance.category_id,
-          amount: difference,
-          target: "account_balance",
-          source: "PAYOUT",
-          type: difference < 0 ? "debit" : "credit",
-          account_balance_id: account_balance.id,
-        });
+      // Process account balances
+      for (const accountBalance of newAccountBalance) {
+        const initialAccountBalanceBalance = initialAccountBalance.find(
+          (el) => el.id === accountBalance.id
+        )?.balance || 0;
+        
+        if (accountBalance.balance !== initialAccountBalanceBalance) {
+          const difference = accountBalance.balance - initialAccountBalanceBalance;
+          
+          // Fetch fresh account balance data before creating transaction
+          const { data: freshBalance, error: balanceError } = await supabase
+            .from("account_balances")
+            .select("*")
+            .eq("id", accountBalance.id)
+            .single();
+
+          if (balanceError) {
+            throw new Error(`Failed to fetch fresh account balance data: ${balanceError.message}`);
+          }
+
+          if (freshBalance) {
+            await addTransaction({
+              user_id: user.id,
+              category_id: accountBalance.category_id,
+              amount: Math.abs(difference),
+              target: "account_balance",
+              source: "PAYOUT",
+              type: "debit",
+              account_balance_id: accountBalance.id,
+            });
+          }
+        }
       }
-    });
 
-    showAlert("User updated successfully", "success");
-    setOpen(false);
-  };
+      showAlert("User balances updated successfully", "success");
+      setOpen(false);
+    } catch (error) {
+      console.error("Error updating balances:", error);
+      showAlert(error instanceof Error ? error.message : "Error updating balances", "error");
+    } finally {
+      setIsUpdating(false);
+    }
+  }, [user.id, userData, initialUserData, addTransaction, showAlert]);
 
-  const handleClearAll = async () => {
-    // Change all balance to 0 then update for those in negative
+  const handleClearAll = useCallback(() => {
     const newUserData = { ...userData };
     newUserData.baki = newUserData.baki.map((baki) =>
       baki.balance < 0 ? { ...baki, balance: 0 } : baki
@@ -86,7 +124,20 @@ const UpdateUserBalanceModal: React.FC<UpdateUserBalanceModalProps> = ({
     );
 
     setUserData(newUserData);
-  };
+  }, [userData]);
+
+  const handleBalanceChange = useCallback((type: "baki" | "account_balance", id: string, newBalance: number) => {
+    if (!isNaN(newBalance)) {
+      setUserData(prev => ({
+        ...prev,
+        [type]: prev[type].map((el) =>
+          el.id === id
+            ? { ...el, balance: newBalance }
+            : el
+        )
+      }));
+    }
+  }, []);
 
   return (
     <>
@@ -98,7 +149,7 @@ const UpdateUserBalanceModal: React.FC<UpdateUserBalanceModalProps> = ({
       </Button>
       <Modal onClose={() => setOpen(false)} show={isOpen} size="7xl">
         <Modal.Header className="border-b border-gray-200 !p-6 dark:border-gray-700">
-          <strong>Update user</strong>
+          <strong>Update user balances</strong>
         </Modal.Header>
         <Modal.Body>
           <div className="grid grid-cols-2 gap-6 sm:grid-cols-2">
@@ -125,18 +176,7 @@ const UpdateUserBalanceModal: React.FC<UpdateUserBalanceModalProps> = ({
                       type="number"
                       placeholder="Baki"
                       value={baki.balance}
-                      onChange={(e) => {
-                        const newBalance = parseInt(e.target.value, 10);
-                        if (!isNaN(newBalance)) {
-                          const newUserData = { ...userData };
-                          newUserData.baki = newUserData.baki.map((el) =>
-                            el.id === baki.id
-                              ? { ...baki, balance: newBalance }
-                              : el
-                          );
-                          setUserData(newUserData);
-                        }
-                      }}
+                      onChange={(e) => handleBalanceChange("baki", baki.id, parseInt(e.target.value, 10))}
                     />
                   </div>
                 </div>
@@ -168,19 +208,7 @@ const UpdateUserBalanceModal: React.FC<UpdateUserBalanceModalProps> = ({
                       type="number"
                       placeholder="Account Balance"
                       value={account_balance.balance}
-                      onChange={(e) => {
-                        const newBalance = parseInt(e.target.value, 10);
-                        if (!isNaN(newBalance)) {
-                          const newUserData = { ...userData };
-                          newUserData.account_balance =
-                            newUserData.account_balance.map((el) =>
-                              el.id === account_balance.id
-                                ? { ...account_balance, balance: newBalance }
-                                : el
-                            );
-                          setUserData(newUserData);
-                        }
-                      }}
+                      onChange={(e) => handleBalanceChange("account_balance", account_balance.id, parseInt(e.target.value, 10))}
                     />
                   </div>
                 </div>
@@ -189,12 +217,19 @@ const UpdateUserBalanceModal: React.FC<UpdateUserBalanceModalProps> = ({
           </div>
         </Modal.Body>
         <Modal.Footer>
-          <Button color="primary" onClick={() => handleUpdateBalance()}>
-            Save all
+          <Button 
+            color="primary" 
+            onClick={handleUpdateBalance}
+            disabled={isUpdating}
+          >
+            {isUpdating ? "Updating..." : "Save all"}
           </Button>
 
-          {/* Clear All button */}
-          <Button color="danger" onClick={() => handleClearAll()}>
+          <Button 
+            color="danger" 
+            onClick={handleClearAll}
+            disabled={isUpdating}
+          >
             Clear all
           </Button>
         </Modal.Footer>

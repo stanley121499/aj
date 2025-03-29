@@ -4,9 +4,6 @@
   "private": true,
   "dependencies": {
     "@supabase/supabase-js": "^2.40.0",
-    "@testing-library/jest-dom": "^5.17.0",
-    "@testing-library/react": "^13.4.0",
-    "@testing-library/user-event": "^13.5.0",
     "@types/jest": "^27.5.2",
     "@types/node": "^16.18.91",
     "@types/react": "^18.2.70",
@@ -28,13 +25,25 @@
     "web-vitals": "^2.1.4"
   },
   "devDependencies": {
+    "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.2.0",
+    "@testing-library/react-hooks": "^8.0.1",
+    "@testing-library/user-event": "^14.6.1",
     "eslint": "^8.0.0",
     "eslint-config-prettier": "^8.3.0",
     "eslint-plugin-react": "^7.28.0",
+    "identity-obj-proxy": "^3.0.0",
+    "jest-environment-jsdom": "^29.7.0",
+    "jest-mock-extended": "^4.0.0-beta1",
+    "msw": "^2.7.3",
+    "node-polyfill-webpack-plugin": "^4.1.0",
     "nodemon": "^2.0.15",
     "prettier": "^2.5.1",
+    "react-app-rewired": "^2.2.1",
     "supabase": "^1.150.0",
-    "svgmap": "^2.10.1"
+    "svgmap": "^2.10.1",
+    "ts-jest": "^29.2.6"
   },
   "scripts": {
     "start": "react-scripts start",

@@ -1,8 +1,9 @@
-import React, { createContext, useContext, useEffect, useState, PropsWithChildren } from "react";
+import React, { createContext, useContext, useEffect, useState, PropsWithChildren, useMemo, useCallback } from "react";
 import { supabase } from "../utils/supabaseClient";
 import { Database } from "../../database.types";
 import { useAlertContext } from "./AlertContext";
 import { useAuthContext } from "./AuthContext";
+import { useRealtimeSubscription } from "../utils/useRealtimeSubscription";
 
 export type AccountBalance = Database['public']['Tables']['account_balances']['Row'];
 export type AccountBalances = { accountBalances: AccountBalance[] };
@@ -11,15 +12,17 @@ export type AccountBalanceInsert = Database['public']['Tables']['account_balance
 interface AccountBalanceContextProps {
   accountBalances: AccountBalance[];
   addAccountBalance: (accountBalance: AccountBalanceInsert) => Promise<AccountBalance | undefined>;
-  deleteAccountBalance: (accountBalance: AccountBalance) => void;
-  updateAccountBalance: (accountBalance: AccountBalance) => void;
+  getOrCreateAccountBalance: (userId: string, categoryId: number) => Promise<AccountBalance>;
+  deleteAccountBalance: (accountBalance: AccountBalance) => Promise<void>;
+  updateAccountBalance: (accountBalance: AccountBalance) => Promise<void>;
+  updateBalanceWithTransaction: (accountBalance: AccountBalance, amount: number, type: "debit" | "credit") => Promise<void>;
   loading: boolean;
   currentUserAccountBalance: AccountBalance[];
 }
 
 const AccountBalanceContext = createContext<AccountBalanceContextProps>(undefined!);
 
-export function AccountBalanceProvider({ children }: PropsWithChildren) {
+export function AccountBalanceProvider({ children }: Readonly<PropsWithChildren>) {
   const [accountBalances, setAccountBalances] = useState<AccountBalance[]>([]);
   const [loading, setLoading] = useState(true);
   const { showAlert } = useAlertContext();
@@ -28,7 +31,7 @@ export function AccountBalanceProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     const fetchAccountBalances = async () => {
-      const { data: accountBalances, error } = await supabase
+      const { data: balances, error } = await supabase
         .from('account_balances')
         .select('*');
 
@@ -37,52 +40,68 @@ export function AccountBalanceProvider({ children }: PropsWithChildren) {
         showAlert('Error fetching account balances', 'error');
       }
 
-      setAccountBalances(accountBalances || []);
-      setCurrentUserAccountBalance(accountBalances?.filter(accountBalance => accountBalance.user_id === user?.id) || []);
+      setAccountBalances(balances || []);
+      setCurrentUserAccountBalance(balances?.filter(accountBalance => accountBalance.user_id === user?.id) || []);
       setLoading(false);
     };
 
     fetchAccountBalances();
-
-    const handleChanges = (payload: any) => {
-      if (payload.eventType === 'INSERT') {
-        setAccountBalances(prev => [payload.new, ...prev]);
-      } else if (payload.eventType === 'UPDATE') {
-        setAccountBalances(prev => prev.map(accountBalance => accountBalance.id === payload.new.id ? payload.new : accountBalance));
-      } else if (payload.eventType === 'DELETE') {
-        setAccountBalances(prev => prev.filter(accountBalance => accountBalance.id !== payload.old.id));
-      }
-    };
-
-    const subscription = supabase
-      .channel('account_balances')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'account_balances' }, payload => {
-        handleChanges(payload);
-      })
-      .subscribe();
-
-    setLoading(false);
-
-    return () => {
-      subscription.unsubscribe();
-    };
   }, [showAlert, user?.id]);
 
-  const addAccountBalance = async (accountBalance: AccountBalanceInsert) => {
+  const handleRealtimeChanges = useCallback((payload: { eventType: string; new: AccountBalance; old: AccountBalance }) => {
+    setAccountBalances(prev => {
+      switch (payload.eventType) {
+        case 'INSERT':
+          return [payload.new, ...prev];
+        case 'UPDATE':
+          return prev.map(accountBalance => 
+            accountBalance.id === payload.new.id ? payload.new : accountBalance
+          );
+        case 'DELETE':
+          return prev.filter(accountBalance => accountBalance.id !== payload.old.id);
+        default:
+          return prev;
+      }
+    });
+  }, []);
+
+  const trackOperation = useRealtimeSubscription<AccountBalance>(
+    { table: "account_balances" },
+    handleRealtimeChanges
+  );
+
+  const addAccountBalance = useCallback(async (accountBalance: AccountBalanceInsert) => {
     const { data, error } = await supabase
       .from('account_balances')
-      .insert(accountBalance);
+      .insert(accountBalance)
+      .select()
+      .single();
 
     if (error) {
       console.error('Error adding account balance:', error);
       showAlert('Error adding account balance', 'error');
-      return;
+      return undefined;
     }
 
-    return data?.[0]
-  };
+    if (data) {
+      trackOperation({
+        id: data.id,
+        type: "INSERT",
+        timestamp: Date.now(),
+        data
+      });
+    }
 
-  const deleteAccountBalance = async (accountBalance: AccountBalance) => {
+    return data;
+  }, [showAlert, trackOperation]);
+
+  const deleteAccountBalance = useCallback(async (accountBalance: AccountBalance) => {
+    trackOperation({
+      id: accountBalance.id,
+      type: "DELETE",
+      timestamp: Date.now()
+    });
+
     const { error } = await supabase
       .from('account_balances')
       .delete()
@@ -91,11 +110,17 @@ export function AccountBalanceProvider({ children }: PropsWithChildren) {
     if (error) {
       console.error('Error deleting account balance:', error);
       showAlert('Error deleting account balance', 'error');
-      return;
     }
-  }
+  }, [showAlert, trackOperation]);
 
-  const updateAccountBalance = async (accountBalance: AccountBalance) => {
+  const updateAccountBalance = useCallback(async (accountBalance: AccountBalance) => {
+    trackOperation({
+      id: accountBalance.id,
+      type: "UPDATE",
+      timestamp: Date.now(),
+      data: accountBalance
+    });
+
     const { error } = await supabase
       .from('account_balances')
       .update(accountBalance)
@@ -104,12 +129,77 @@ export function AccountBalanceProvider({ children }: PropsWithChildren) {
     if (error) {
       console.error('Error updating account balance:', error);
       showAlert('Error updating account balance', 'error');
-      return;
     }
-  }
+  }, [showAlert, trackOperation]);
+
+  const getOrCreateAccountBalance = useCallback(async (userId: string, categoryId: number): Promise<AccountBalance> => {
+    const existingBalance = accountBalances.find(
+      (ab) => ab.user_id === userId && ab.category_id === categoryId
+    );
+
+    if (existingBalance) {
+      return existingBalance;
+    }
+
+    const newBalance = await addAccountBalance({
+      user_id: userId,
+      category_id: categoryId,
+      balance: 0,
+    });
+
+    if (!newBalance) {
+      throw new Error(`Failed to create account balance for user: ${userId}`);
+    }
+
+    return newBalance;
+  }, [accountBalances, addAccountBalance]);
+
+  const updateBalanceWithTransaction = useCallback(async (accountBalance: AccountBalance, amount: number, type: "debit" | "credit") => {
+    const balanceChange = type === "debit" ? amount : -amount;
+    const newBalance = accountBalance.balance + balanceChange;
+    const updatedBalance = { ...accountBalance, balance: newBalance };
+
+    trackOperation({
+      id: accountBalance.id,
+      type: "UPDATE",
+      timestamp: Date.now(),
+      data: updatedBalance
+    });
+
+    const { error: updateError } = await supabase
+      .from("account_balances")
+      .update({ balance: newBalance })
+      .eq("id", accountBalance.id);
+
+    if (updateError) {
+      console.error("Error updating account balance:", updateError);
+      showAlert("Error updating account balance", "error");
+      throw updateError;
+    }
+  }, [showAlert, trackOperation]);
+
+  const value = useMemo(() => ({
+    accountBalances,
+    addAccountBalance,
+    getOrCreateAccountBalance,
+    deleteAccountBalance,
+    updateAccountBalance,
+    updateBalanceWithTransaction,
+    loading,
+    currentUserAccountBalance,
+  }), [
+    accountBalances,
+    addAccountBalance,
+    getOrCreateAccountBalance,
+    deleteAccountBalance,
+    updateAccountBalance,
+    updateBalanceWithTransaction,
+    loading,
+    currentUserAccountBalance,
+  ]);
 
   return (
-    <AccountBalanceContext.Provider value={{ accountBalances, addAccountBalance, deleteAccountBalance, updateAccountBalance, loading, currentUserAccountBalance }}>
+    <AccountBalanceContext.Provider value={value}>
       {children}
     </AccountBalanceContext.Provider>
   );

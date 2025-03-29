@@ -64,9 +64,9 @@ const ResultListPage: FC = function () {
             </div>
 
             <div className="ml-auto flex items-center space-x-2 sm:space-x-3">
-              {/* <Button color="primary" onClick={updateAllResults}>
+              <Button color="primary" onClick={updateAllResults}>
                 Update All Results
-              </Button> */}
+              </Button>
               <AddResultModal />
             </div>
           </div>

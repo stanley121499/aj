@@ -15,7 +15,7 @@ import { AccountBalance } from "./AccountBalanceContext";
 export type User = {
   id: string;
   email: string;
-  password: string;
+  password?: string;
   user_detail: Database["public"]["Tables"]["user_details"]["Row"];
   baki: Baki[];
   account_balance: AccountBalance[];
@@ -40,107 +40,127 @@ export function UserProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     const fetchUsers = async () => {
-      const { data: users, error } = await supabase.auth.admin.listUsers({
-        page:1,
-        perPage: 1000
-      })
+      try {
+        // First get all users from auth
+        const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers({
+          page: 1,
+          perPage: 1000
+        });
 
-      if (error) {
-        console.error("Error fetching users:", error);
-        showAlert("Error fetching users", "error");
-        return;
-      }
-
-      // for each user, fetch the user details, account balance, and baki and add them to the user object
-      let usersWithDetails = await Promise.all(
-        users.users.map(async (user: any) => {
-          const { data: user_detail, error } = await supabase
-            .from("user_details")
-            .select("*")
-            .eq("user_id", user.id)
-            .single();
-
-          if (error) {
-            console.error("Error fetching user details:", error);
-            return { ...user, user_detail: null };
-          }
-
-          return { ...user, user_detail };
-        })
-      );
-
-      usersWithDetails = await Promise.all(
-        usersWithDetails.map(async (user: any) => {
-          const { data: account_balance, error } = await supabase
-            .from("account_balances")
-            .select("*")
-            .eq("user_id", user.id);
-
-          if (error) {
-            console.error("Error fetching account balance:", error);
-            return { ...user, account_balance: null };
-          }
-
-          return { ...user, account_balance };
-        })
-      );
-
-      usersWithDetails = await Promise.all(
-        usersWithDetails.map(async (user: any) => {
-          const { data: baki, error } = await supabase
-            .from("bakis")
-            .select("*")
-            .eq("user_id", user.id);
-
-          if (error) {
-            console.error("Error fetching baki:", error);
-            return { ...user, baki: null };
-          }
-
-          return { ...user, baki };
-        })
-      );
-
-      setUsers(usersWithDetails);
-
-      const handleChanges = (payload: any) => {
-        if (payload.eventType === "INSERT") {
-          setUsers((prev) => [payload.new, ...prev]);
-        } else if (payload.eventType === "UPDATE") {
-          setUsers((prev) =>
-            prev.map((user) =>
-              user.id === payload.new.id ? payload.new : user
-            )
-          );
-        } else if (payload.eventType === "DELETE") {
-          setUsers((prev) => prev.filter((user) => user.id !== payload.old.id));
+        if (authError) {
+          console.error("Error fetching auth users:", authError);
+          showAlert("Error fetching users", "error");
+          return;
         }
-      };
 
-      const subscription = supabase
-        .channel("auth.users")
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "auth", table: "users" },
-          (payload) => {
-            handleChanges(payload);
+        if (!authUsers?.users?.length) {
+          console.error("No users found in auth");
+          showAlert("No users found", "error");
+          return;
+        }
+
+        // Then get all user details
+        const { data: userDetails, error: detailsError } = await supabase
+          .from("user_details")
+          .select("*");
+
+        if (detailsError) {
+          console.error("Error fetching user details:", detailsError);
+          showAlert("Error fetching user details", "error");
+          return;
+        }
+
+        // Combine auth users with their details
+        const usersWithDetails = authUsers.users.map(authUser => {
+          if (!authUser.email) {
+            console.error("User found without email:", authUser.id);
+            return null;
           }
-        )
-        .subscribe();
+          const userDetail = userDetails?.find(detail => detail.user_id === authUser.id);
+          return {
+            ...authUser,
+            email: authUser.email,
+            user_detail: userDetail || null,
+            account_balance: [],
+            baki: []
+          };
+        }).filter((user): user is NonNullable<typeof user> => user !== null);
 
-      setLoading(false);
+        // Fetch account balances
+        const { data: accountBalances, error: balanceError } = await supabase
+          .from("account_balances")
+          .select("*");
 
-      return () => {
-        subscription.unsubscribe();
-      };
+        if (balanceError) {
+          console.error("Error fetching account balances:", balanceError);
+          showAlert("Error fetching account balances", "error");
+          return;
+        }
+
+        // Add account balances to users
+        const usersWithBalances = usersWithDetails.map(user => ({
+          ...user,
+          account_balance: accountBalances?.filter(balance => balance.user_id === user.id) || []
+        }));
+
+        // Fetch bakis
+        const { data: bakis, error: bakiError } = await supabase
+          .from("bakis")
+          .select("*");
+
+        if (bakiError) {
+          console.error("Error fetching bakis:", bakiError);
+          showAlert("Error fetching bakis", "error");
+          return;
+        }
+
+        // Add bakis to users
+        const finalUsers = usersWithBalances.map(user => ({
+          ...user,
+          baki: bakis?.filter(baki => baki.user_id === user.id) || []
+        }));
+
+        setUsers(finalUsers);
+      } catch (error) {
+        console.error("Error in fetchUsers:", error);
+        showAlert("Error fetching users", "error");
+      } finally {
+        setLoading(false);
+      }
     };
 
     fetchUsers();
+
+    const handleChanges = (payload: any) => {
+      if (payload.eventType === "INSERT") {
+        setUsers((prev) => [payload.new, ...prev]);
+      } else if (payload.eventType === "UPDATE") {
+        setUsers((prev) =>
+          prev.map((user) =>
+            user.id === payload.new.id ? payload.new : user
+          )
+        );
+      } else if (payload.eventType === "DELETE") {
+        setUsers((prev) => prev.filter((user) => user.id !== payload.old.id));
+      }
+    };
+
+    const subscription = supabase
+      .channel("auth.users")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "auth", table: "users" },
+        handleChanges
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, [showAlert]);
 
   const addUser = async (user: User) => {
     setLoading(true);
-    console.log("Inside addUser, user: ", user);
     const { data, error } = await supabase.auth.admin.createUser({
       email: user.email,
       password: user.password,

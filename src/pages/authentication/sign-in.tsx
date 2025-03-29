@@ -1,36 +1,46 @@
 /* eslint-disable jsx-a11y/anchor-is-valid */
 import { Button, Card, Label, TextInput } from "flowbite-react";
 import type { FC } from "react";
-import React from "react";
+import React, { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import LoadingPage from "../pages/loading";
 import { useAuthContext } from "../../context/AuthContext";
 
 const SignInPage: FC = function () {
-  const navigate = useNavigate(); // Use useNavigate from react-router-dom
-  const { signIn, user, loading } = useAuthContext(); // Use signIn from useSupabaseAuth
+  const navigate = useNavigate();
+  const { signIn, user, loading } = useAuthContext();
   const [username, setUsername] = React.useState("");
   const [password, setPassword] = React.useState("");
-  const [error, setError] = React.useState(""); // Assume you've defined a state to capture errors [optional]
+  const [error, setError] = React.useState("");
+
+  // Handle navigation based on auth state
+  useEffect(() => {
+    if (user && !loading) {
+      navigate("/dashboard");
+    }
+  }, [user, loading, navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault(); // Prevent default form submission behavior
-    const email = username + "@fruitcalculator.com"; // Append domain to username to create email
-    const result = await signIn(email, password);
+    e.preventDefault();
+    setError(""); // Clear any previous errors
+    
+    try {
+      const email = username + "@fruitcalculator.com";
+      const result = await signIn(email, password);
 
-    // Handle sign-in errors
-    if (result.error) {
-      console.error("Sign in error:", result.error.message);
-      setError(result.error.message);
-    } else {
-      navigate("/dashboard"); // Redirect to dashboard after successful sign-in
+      if (result.error) {
+        console.error("Sign in error:", result.error.message);
+        setError(result.error.message);
+      }
+      // No need to navigate here as the useEffect will handle it when user state updates
+    } catch (err) {
+      console.error("Unexpected error during sign in:", err);
+      setError("An unexpected error occurred. Please try again.");
     }
   };
 
   if (loading) {
     return <LoadingPage />;
-  } else if (user) {
-    navigate("/dashboard"); // Redirect to dashboard if user is already signed in
   }
 
   return (
@@ -54,14 +64,16 @@ const SignInPage: FC = function () {
             {error}
           </div>
         )}
-        <form>
+        <form onSubmit={handleLogin}>
           <div className="mb-4 flex flex-col gap-y-3">
             <Label htmlFor="email">Your Username</Label>
             <TextInput
               id="email"
               name="email"
               placeholder="username123"
+              value={username}
               onChange={(e) => setUsername(e.target.value)}
+              required
             />
           </div>
           <div className="mb-6 flex flex-col gap-y-3">
@@ -71,14 +83,15 @@ const SignInPage: FC = function () {
               name="password"
               placeholder="••••••••"
               type="password"
+              value={password}
               onChange={(e) => setPassword(e.target.value)}
+              required
             />
           </div>
           <div className="mb-6">
             <Button
               type="submit"
-              className="w-full lg:w-auto"
-              onClick={handleLogin}>
+              className="w-full lg:w-auto">
               Login to your account
             </Button>
           </div>

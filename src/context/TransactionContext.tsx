@@ -4,38 +4,37 @@ import React, {
   useEffect,
   useState,
   PropsWithChildren,
+  useMemo,
+  useCallback,
 } from "react";
 import { supabase } from "../utils/supabaseClient";
-import { Database } from "../../database.types";
 import { useAlertContext } from "./AlertContext";
 import { useAccountBalanceContext } from "./AccountBalanceContext";
 import { useBakiContext } from "./BakiContext";
-
-export type Transaction = Database["public"]["Tables"]["transactions"]["Row"];
-export type Transactions = { transactions: Transaction[] };
-export type TransactionInsert =
-  Database["public"]["Tables"]["transactions"]["Insert"];
+import { Transaction, TransactionInsert } from "../types/transaction";
+import { validateTransaction } from "../utils/transactionUtils";
+import { useRealtimeSubscription } from "../utils/useRealtimeSubscription";
 
 interface TransactionContextProps {
   transactions: Transaction[];
-  addTransaction: (transaction: TransactionInsert) => void;
-  deleteTransaction: (transaction: Transaction) => void;
-  updateTransaction: (transaction: Transaction) => void;
+  addTransaction: (transaction: TransactionInsert) => Promise<void>;
+  deleteTransaction: (transaction: Transaction, skipBalanceUpdate?: boolean) => Promise<void>;
+  updateTransaction: (transaction: Transaction) => Promise<void>;
   loading: boolean;
 }
 
 const TransactionContext = createContext<TransactionContextProps>(undefined!);
 
-export function TransactionProvider({ children }: PropsWithChildren) {
+export function TransactionProvider({ children }: Readonly<PropsWithChildren>) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const { showAlert } = useAlertContext();
-  const { accountBalances, updateAccountBalance } = useAccountBalanceContext();
-  const { bakis, updateBaki } = useBakiContext();
+  const { accountBalances, updateBalanceWithTransaction: updateAccountBalanceWithTransaction } = useAccountBalanceContext();
+  const { bakis, updateBalanceWithTransaction: updateBakiWithTransaction } = useBakiContext();
 
   useEffect(() => {
     const fetchTransactions = async () => {
-      const { data: transactions, error } = await supabase
+      const { data: fetchedTransactions, error } = await supabase
         .from("transactions")
         .select("*")
         .order("id", { ascending: false });
@@ -45,227 +44,177 @@ export function TransactionProvider({ children }: PropsWithChildren) {
         showAlert("Error fetching transactions", "error");
       }
 
-      setTransactions(transactions || []);
+      setTransactions(fetchedTransactions || []);
       setLoading(false);
     };
 
     fetchTransactions();
-
-    const handleChanges = (payload: any) => {
-      if (payload.eventType === "INSERT") {
-        setTransactions((prev) => [payload.new, ...prev]);
-      } else if (payload.eventType === "UPDATE") {
-        setTransactions((prev) =>
-          prev.map((transaction) =>
-            transaction.id === payload.new.id ? payload.new : transaction
-          )
-        );
-      } else if (payload.eventType === "DELETE") {
-        setTransactions((prev) =>
-          prev.filter((transaction) => transaction.id !== payload.old.id)
-        );
-      }
-    };
-
-    const subscription = supabase
-      .channel("transactions")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "transactions" },
-        (payload) => {
-          handleChanges(payload);
-        }
-      )
-      .subscribe();
-
-    setLoading(false);
-
-    return () => {
-      subscription.unsubscribe();
-    };
   }, [showAlert]);
 
-  const addTransaction = async (transaction: TransactionInsert) => {
-    if (transaction.user_id === "dd639c50-91d0-4eb8-8762-eafece6b0a8c") {
-      console.log("Amount", transaction.amount);
-    }
-    // console.log("Adding transaction", transaction)
-    // console.log("Account balances", accountBalances)
-    // Check transaction.target and update the balance of the target
-    if (transaction.target === "account_balance") {
-      const accountBalance = accountBalances.find(
-        (ab) => ab.id === transaction.account_balance_id
-      );
+  const handleRealtimeChanges = useCallback((payload: { eventType: string; new: Transaction; old: Transaction }) => {
+    setTransactions(prev => {
+      switch (payload.eventType) {
+        case 'INSERT':
+          return [payload.new, ...prev];
+        case 'UPDATE':
+          return prev.map(transaction => transaction.id === payload.new.id ? payload.new : transaction);
+        case 'DELETE':
+          return prev.filter(transaction => transaction.id !== payload.old.id);
+        default:
+          return prev;
+      }
+    });
+  }, []);
 
-      if (!accountBalance) {
-        console.error("Account balance not found");
-        showAlert("Account balance not found", "error");
+  const trackOperation = useRealtimeSubscription<Transaction>(
+    { table: "transactions" },
+    handleRealtimeChanges
+  );
+
+  const addTransaction = useCallback(async (transaction: TransactionInsert) => {
+    try {
+      const { data, error } = await supabase
+        .from("transactions")
+        .insert(transaction)
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Error adding transaction:", error);
+        showAlert("Error adding transaction", "error");
         return;
       }
 
-      if (transaction.type === "debit") {
-        accountBalance.balance -= transaction.amount || 0;
-      } else {
-        accountBalance.balance += transaction.amount || 0;
+      if (data) {
+        if (transaction.target === "account_balance" && transaction.account_balance_id) {
+          const { data: freshBalance, error: balanceError } = await supabase
+            .from("account_balances")
+            .select("*")
+            .eq("id", transaction.account_balance_id)
+            .single();
+
+          if (balanceError) {
+            console.error("Error fetching fresh balance:", balanceError);
+            showAlert("Error updating balance", "error");
+            return;
+          }
+
+          if (freshBalance) {
+            await updateAccountBalanceWithTransaction(freshBalance, transaction.amount, transaction.type);
+          }
+        } else if (transaction.target === "baki" && transaction.baki_id) {
+          const { data: freshBaki, error: bakiError } = await supabase
+            .from("bakis")
+            .select("*")
+            .eq("id", transaction.baki_id)
+            .single();
+
+          if (bakiError) {
+            console.error("Error fetching fresh baki:", bakiError);
+            showAlert("Error updating baki", "error");
+            return;
+          }
+
+          if (freshBaki) {
+            await updateBakiWithTransaction(freshBaki, transaction.amount, transaction.type);
+          }
+        }
+
+        trackOperation({
+          id: data.id,
+          type: "INSERT",
+          timestamp: Date.now(),
+          data
+        });
       }
-
-      updateAccountBalance(accountBalance);
-    } else if (transaction.target === "baki") {
-      const baki = bakis.find((baki) => baki.id === transaction.baki_id);
-
-      if (!baki) {
-        console.error("Baki not found");
-        showAlert("Baki not found", "error");
-        return;
-      }
-
-      if (transaction.type === "debit") {
-        baki.balance -= transaction.amount || 0;
-      } else {
-        baki.balance += transaction.amount || 0;
-      }
-
-      updateBaki(baki);
-    }
-
-    const { error } = await supabase.from("transactions").insert(transaction);
-
-    if (error) {
+    } catch (error) {
       console.error("Error adding transaction:", error);
-      console.log("Transaction", transaction);
       showAlert("Error adding transaction", "error");
-      return;
     }
-  };
+  }, [showAlert, trackOperation, updateAccountBalanceWithTransaction, updateBakiWithTransaction]);
 
-  const deleteTransaction = async (transaction: Transaction) => {
-    // Check transaction.target and update the balance of the target
-    console.log("Deleting transaction", transaction);
-    if (transaction.target === "account_balance") {
-      const accountBalance = accountBalances.find(
-        (ab) => ab.id === transaction.account_balance_id
-      );
+  const deleteTransaction = useCallback(async (transaction: Transaction, skipBalanceUpdate: boolean = false) => {
+    try {
+      trackOperation({
+        id: transaction.id,
+        type: "DELETE",
+        timestamp: Date.now()
+      });
 
-      if (!accountBalance) {
-        console.error("Account balance not found");
-        showAlert("Account balance not found", "error");
+      const { error } = await supabase
+        .from("transactions")
+        .delete()
+        .eq("id", transaction.id);
+
+      if (error) {
+        console.error("Error deleting transaction:", error);
+        showAlert("Error deleting transaction", "error");
         return;
       }
 
-      if (transaction.type === "debit") {
-        accountBalance.balance += transaction.amount || 0;
-      } else {
-        accountBalance.balance -= transaction.amount || 0;
+      if (!skipBalanceUpdate) {
+        if (transaction.target === "account_balance") {
+          const accountBalance = accountBalances.find(
+            (ab) => ab.id === transaction.account_balance_id
+          );
+          if (accountBalance) {
+            await updateAccountBalanceWithTransaction(
+              accountBalance,
+              transaction.amount,
+              transaction.type === "debit" ? "credit" : "debit"
+            );
+          }
+        } else if (transaction.target === "baki") {
+          const baki = bakis.find((b) => b.id === transaction.baki_id);
+          if (baki) {
+            await updateBakiWithTransaction(
+              baki,
+              transaction.amount,
+              transaction.type === "debit" ? "credit" : "debit"
+            );
+          }
+        }
       }
-
-      updateAccountBalance(accountBalance);
-
-      console.log("Account balance updated", accountBalance);
-    } else if (transaction.target === "baki") {
-      const baki = bakis.find((baki) => baki.id === transaction.baki_id);
-
-      if (!baki) {
-        console.error("Baki not found");
-        showAlert("Baki not found", "error");
-        return;
-      }
-
-      if (transaction.type === "debit") {
-        baki.balance += transaction.amount || 0;
-      } else {
-        baki.balance -= transaction.amount || 0;
-      }
-
-      updateBaki(baki);
-    }
-
-    const { error } = await supabase
-      .from("transactions")
-      .delete()
-      .eq("id", transaction.id);
-
-    if (error) {
+    } catch (error) {
       console.error("Error deleting transaction:", error);
       showAlert("Error deleting transaction", "error");
-      return;
     }
-  };
+  }, [showAlert, trackOperation, accountBalances, bakis, updateAccountBalanceWithTransaction, updateBakiWithTransaction]);
 
-  const updateTransaction = async (transaction: Transaction) => {
-    // Check transaction.target and update the balance of the target if the amount has changed
-    const oldTransaction = transactions.find((t) => t.id === transaction.id);
+  const updateTransaction = useCallback(async (transaction: Transaction) => {
+    try {
+      trackOperation({
+        id: transaction.id,
+        type: "UPDATE",
+        timestamp: Date.now(),
+        data: transaction
+      });
 
-    if (oldTransaction && oldTransaction.amount !== transaction.amount) {
-      if (transaction.target === "account_balance") {
-        const accountBalance = accountBalances.find(
-          (ab) => ab.id === transaction.account_balance_id
-        );
+      const { error } = await supabase
+        .from("transactions")
+        .update(transaction)
+        .eq("id", transaction.id);
 
-        if (!accountBalance) {
-          console.error("Account balance not found");
-          showAlert("Account balance not found", "error");
-          return;
-        }
-
-        if (oldTransaction.type === "debit") {
-          accountBalance.balance += oldTransaction.amount || 0;
-        } else {
-          accountBalance.balance -= oldTransaction.amount || 0;
-        }
-
-        if (transaction.type === "debit") {
-          accountBalance.balance -= transaction.amount || 0;
-        } else {
-          accountBalance.balance += transaction.amount || 0;
-        }
-
-        updateAccountBalance(accountBalance);
-      } else if (transaction.target === "baki") {
-        const baki = bakis.find((baki) => baki.id === transaction.baki_id);
-
-        if (!baki) {
-          console.error("Baki not found");
-          showAlert("Baki not found", "error");
-          return;
-        }
-
-        if (oldTransaction.type === "debit") {
-          baki.balance += oldTransaction.amount || 0;
-        } else {
-          baki.balance -= oldTransaction.amount || 0;
-        }
-
-        if (transaction.type === "debit") {
-          baki.balance -= transaction.amount || 0;
-        } else {
-          baki.balance += transaction.amount || 0;
-        }
-
-        updateBaki(baki);
+      if (error) {
+        console.error("Error updating transaction:", error);
+        showAlert("Error updating transaction", "error");
       }
-    }
-
-    const { error } = await supabase
-      .from("transactions")
-      .update(transaction)
-      .eq("id", transaction.id);
-
-    if (error) {
+    } catch (error) {
       console.error("Error updating transaction:", error);
       showAlert("Error updating transaction", "error");
-      return;
     }
-  };
+  }, [showAlert, trackOperation]);
+
+  const value = useMemo(() => ({
+    transactions,
+    addTransaction,
+    deleteTransaction,
+    updateTransaction,
+    loading,
+  }), [transactions, addTransaction, deleteTransaction, updateTransaction, loading]);
 
   return (
-    <TransactionContext.Provider
-      value={{
-        transactions,
-        addTransaction,
-        deleteTransaction,
-        updateTransaction,
-        loading,
-      }}>
+    <TransactionContext.Provider value={value}>
       {children}
     </TransactionContext.Provider>
   );
@@ -275,10 +224,10 @@ export function useTransactionContext() {
   const context = useContext(TransactionContext);
 
   if (!context) {
-    throw new Error(
-      "useTransactionContext must be used within a TransactionProvider"
-    );
+    throw new Error("useTransactionContext must be used within a TransactionProvider");
   }
 
   return context;
 }
+
+export type { Transaction, TransactionInsert };

@@ -30,9 +30,16 @@ import ResultListPage from "./pages/results/list";
 import OrangeListPage from "./pages/orange/list";
 import useInactivityLogout from "./hooks/useInactivityLogout";
 
+/**
+ * Component that handles user inactivity logout
+ * Must be used within AuthProvider
+ */
+const InactivityHandler: React.FC = () => {
+  useInactivityLogout(900000); // 15 minutes of inactivity
+  return null;
+};
+
 const App: React.FC = () => {
-  // useInactivityLogout(60000); // 1 minute of inactivity
-  
   return (
     <AlertProvider>
       <AuthProvider>
@@ -44,6 +51,7 @@ const App: React.FC = () => {
                   <NoteProvider>
                     <ResultProvider>
                       <AlertComponent />
+                      <InactivityHandler />
                       <BrowserRouter>
                         <Routes>
                           <Route element={<FlowbiteWrapper />}>
