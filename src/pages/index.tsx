@@ -93,12 +93,12 @@ const DashboardPage: React.FC = function () {
           <h1 className="text-xl font-semibold text-gray-900 dark:text-white sm:text-2xl">
             Dashboard
           </h1>
-          <Button
+          {/* <Button
             color="failure"
             onClick={handleResetCalculations}
             className="bg-red-600 hover:bg-red-700">
             Reset Calculations
-          </Button>
+          </Button> */}
         </div>
         <div className="col-span-full xl:col-auto">
           <BalanceCards />
