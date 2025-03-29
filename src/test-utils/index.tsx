@@ -1,5 +1,4 @@
 import React, { PropsWithChildren } from "react";
-import { render as rtlRender } from "@testing-library/react";
 import { BrowserRouter } from "react-router-dom";
 import { ResultProvider } from "../context/ResultContext";
 import { TransactionProvider } from "../context/TransactionContext";
@@ -28,12 +27,3 @@ export function AllProviders({ children }: PropsWithChildren<{}>) {
   );
 }
 
-function render(ui: React.ReactElement, options = {}) {
-  return rtlRender(ui, { wrapper: AllProviders, ...options });
-}
-
-// Re-export everything
-export * from "@testing-library/react";
-
-// Override render method
-export { render }; 
