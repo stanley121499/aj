@@ -19,8 +19,8 @@ export const createBalanceTransaction = (
 ): TransactionInsert => ({
   user_id: user.id,
   account_balance_id: accountBalance.id,
-  amount: note.amount,
-  type: "credit", // Notes always mean user pays boss, so always credit (reduce balance)
+  amount: Math.abs(note.amount),
+  type: note.amount >= 0 ? "credit" : "debit", // Positive: user pays boss (credit), Negative: boss pays user (debit)
   target: "account_balance",
   category_id: note.category_id,
   source: "NOTE",
@@ -40,8 +40,8 @@ export const createBakiTransaction = (
 ): TransactionInsert => ({
   user_id: user.id,
   baki_id: baki.id,
-  amount: note.amount,
-  type: "credit", // Notes always mean user pays boss, so always credit (reduce balance)
+  amount: Math.abs(note.amount),
+  type: note.amount >= 0 ? "credit" : "debit", // Positive: user pays boss (credit), Negative: boss pays user (debit)
   target: "baki",
   category_id: note.category_id,
   source: "NOTE",
@@ -53,7 +53,7 @@ export const createBakiTransaction = (
  * @throws Error if the note is invalid
  */
 export const validateNote = (note: Note): void => {
-  if (typeof note.amount !== "number" || note.amount <= 0) {
+  if (typeof note.amount !== "number") {
     throw new Error("Invalid amount");
   }
   if (!note.category_id) {
