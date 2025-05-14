@@ -11,6 +11,10 @@ import CreateNoteForm from "../../components/dashboard/create-note-form";
 const AddNoteModal: React.FC = function () {
   const [isOpen, setOpen] = useState(false);
 
+  const handleNoteCreated = () => {
+    setOpen(false);
+  };
+
   return (
     <>
       <Button color="primary" onClick={() => setOpen(true)}>
@@ -25,7 +29,7 @@ const AddNoteModal: React.FC = function () {
         </Modal.Header>
         <Modal.Body>
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-1 overflow-y-auto">
-            <CreateNoteForm />
+            <CreateNoteForm onNoteCreated={handleNoteCreated} />
           </div>
         </Modal.Body>
       </Modal>

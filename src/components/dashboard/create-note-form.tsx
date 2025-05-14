@@ -11,9 +11,10 @@ type method = "CA" | "BT" | "CH";
 
 interface CreateNoteFormProps {
   currentUser?: boolean;
+  onNoteCreated?: () => void;
 }
 
-const CreateNoteForm: React.FC<CreateNoteFormProps> = ({ currentUser }) => {
+const CreateNoteForm: React.FC<CreateNoteFormProps> = ({ currentUser, onNoteCreated }) => {
   const [file, setFile] = React.useState<File | null>(null);
   const { addNote } = useNoteContext();
   const { categories } = useCategoryContext();
@@ -22,6 +23,9 @@ const CreateNoteForm: React.FC<CreateNoteFormProps> = ({ currentUser }) => {
   const { user } = useAuthContext();
   const [loading, setLoading] = React.useState(false);
 
+  // Get the default user ID - either the current user's ID or the first user's ID from the list
+  const defaultUserId = currentUser ? user?.id : users[0]?.id;
+
   const [note, setNote] = React.useState<NoteInsert>({
     amount: 0,
     category_id: 1,
@@ -29,9 +33,19 @@ const CreateNoteForm: React.FC<CreateNoteFormProps> = ({ currentUser }) => {
     media_url: "",
     method: "CA",
     status: "PENDING",
-    user_id: currentUser ? user?.id : "",
+    user_id: defaultUserId || "",
     target: "account_balance",
   });
+
+  // Update user_id when users array changes
+  React.useEffect(() => {
+    if (!currentUser && users.length > 0 && !note.user_id) {
+      setNote(prev => ({
+        ...prev,
+        user_id: users[0].id
+      }));
+    }
+  }, [users, currentUser, note.user_id]);
 
   const handleCreateNote = async () => {
     setLoading(true);
@@ -51,6 +65,7 @@ const CreateNoteForm: React.FC<CreateNoteFormProps> = ({ currentUser }) => {
       if (error) {
         console.error(error);
         showAlert("Failed to upload file", "error");
+        setLoading(false);
         return;
       }
 
@@ -75,6 +90,11 @@ const CreateNoteForm: React.FC<CreateNoteFormProps> = ({ currentUser }) => {
 
     showAlert("Note created successfully", "success");
     setLoading(false);
+    
+    // Call the onNoteCreated callback if provided
+    if (onNoteCreated) {
+      onNoteCreated();
+    }
   };
 
   return (

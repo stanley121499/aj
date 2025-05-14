@@ -10,6 +10,8 @@ import type { FC } from "react";
 import React from "react";
 import {
   HiHome,
+  HiChevronUp,
+  HiChevronDown,
   // HiTrash
 } from "react-icons/hi";
 import NavbarSidebarLayout from "../../layouts/navbar-sidebar";
@@ -18,14 +20,60 @@ import EditUserModal from "./edit-user-modal";
 import LoadingPage from "../pages/loading";
 import { useUserContext, Users } from "../../context/UserContext";
 
+type SortDirection = "asc" | "desc" | null;
+type SortColumn = "username" | "accountBalance" | null;
+
+interface SortState {
+  column: SortColumn;
+  direction: SortDirection;
+}
+
 const UserListPage: FC = function () {
   const { users, loading } = useUserContext();
-
   const [searchValue, setSearchValue] = React.useState("");
+  const [sortState, setSortState] = React.useState<SortState>({
+    column: null,
+    direction: null,
+  });
 
   if (loading || !users || users.length === 0) {
     return <LoadingPage />;
   }
+
+  const handleSort = (column: SortColumn) => {
+    setSortState((prev) => ({
+      column,
+      direction:
+        prev.column === column && prev.direction === "asc" ? "desc" : "asc",
+    }));
+  };
+
+  const getSortedUsers = (usersToSort: Users["users"]) => {
+    if (!sortState.column || !sortState.direction) return usersToSort;
+
+    return [...usersToSort].sort((a, b) => {
+      if (sortState.column === "username") {
+        const usernameA = a.email.split("@")[0].toLowerCase();
+        const usernameB = b.email.split("@")[0].toLowerCase();
+        return sortState.direction === "asc"
+          ? usernameA.localeCompare(usernameB)
+          : usernameB.localeCompare(usernameA);
+      }
+
+      if (sortState.column === "accountBalance") {
+        const balanceA = a.account_balance.reduce((acc, ab) => acc + ab.balance, 0);
+        const balanceB = b.account_balance.reduce((acc, ab) => acc + ab.balance, 0);
+        return sortState.direction === "asc" ? balanceA - balanceB : balanceB - balanceA;
+      }
+
+      return 0;
+    });
+  };
+
+  const filteredUsers = users.filter((user) =>
+    user.email.toLowerCase().includes(searchValue.toLowerCase())
+  );
+  const sortedUsers = getSortedUsers(filteredUsers);
 
   return (
     <NavbarSidebarLayout>
@@ -72,9 +120,12 @@ const UserListPage: FC = function () {
         <div className="overflow-x-auto">
           <div className="inline-block min-w-full align-middle">
             <div className="overflow-hidden shadow">
-              {users.length > 0 ? (
-                <UsersTable users={users.filter((user) => user.email.toLowerCase().includes(searchValue.toLowerCase()))} />
-
+              {sortedUsers.length > 0 ? (
+                <UsersTable 
+                  users={sortedUsers} 
+                  sortState={sortState}
+                  onSort={handleSort}
+                />
               ) : (
                 <div className="p-4 text-center">No users found</div>
               )}
@@ -87,18 +138,40 @@ const UserListPage: FC = function () {
   );
 };
 
-const UsersTable: React.FC<Users> = function ({ users }) {
-  // const { deleteUser } = useUserContext();
+interface UsersTableProps extends Users {
+  sortState: SortState;
+  onSort: (column: SortColumn) => void;
+}
+
+const UsersTable: React.FC<UsersTableProps> = function ({ users, sortState, onSort }) {
+  const renderSortIcon = (column: SortColumn) => {
+    if (sortState.column !== column) return null;
+    return sortState.direction === "asc" ? (
+      <HiChevronUp className="ml-1 inline h-4 w-4" />
+    ) : (
+      <HiChevronDown className="ml-1 inline h-4 w-4" />
+    );
+  };
 
   return (
     <Table className="min-w-full divide-y divide-gray-200 dark:divide-gray-600">
       <Table.Head className="bg-gray-100 dark:bg-gray-700">
-        <Table.HeadCell>Username</Table.HeadCell>
+        <Table.HeadCell 
+          className="cursor-pointer"
+          onClick={() => onSort("username")}
+        >
+          Username {renderSortIcon("username")}
+        </Table.HeadCell>
         <Table.HeadCell>Birthday</Table.HeadCell>
         <Table.HeadCell>Phone Number</Table.HeadCell>
         <Table.HeadCell>Role</Table.HeadCell>
         <Table.HeadCell>Baki Total</Table.HeadCell>
-        <Table.HeadCell>Account Balance Total</Table.HeadCell>
+        <Table.HeadCell 
+          className="cursor-pointer"
+          onClick={() => onSort("accountBalance")}
+        >
+          Account Balance Total {renderSortIcon("accountBalance")}
+        </Table.HeadCell>
         <Table.HeadCell>Actions</Table.HeadCell>
       </Table.Head>
       <Table.Body className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
