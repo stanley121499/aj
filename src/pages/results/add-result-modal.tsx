@@ -17,6 +17,7 @@ import { ResultInsert, useResultContext } from "../../context/ResultContext";
 
 const AddResultModal: React.FC = function () {
   const [isOpen, setOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { addResult } = useResultContext();
   const { user } = useAuthContext();
   const { showAlert } = useAlertContext();
@@ -30,10 +31,12 @@ const AddResultModal: React.FC = function () {
   });
 
   const handleAddResult = async () => {
+    if (isSubmitting) return; // Prevent multiple submissions
+    
+    setIsSubmitting(true);
     try {
       await addResult(resultData);
-      setOpen(false);
-      showAlert("Result added successfully", "success");
+      setOpen(false); // Only close modal on success
       setResultData({
         category_id: 0,
         result: "",
@@ -42,7 +45,10 @@ const AddResultModal: React.FC = function () {
         user_id: user.id,
       });
     } catch (error: any) {
-      showAlert(error.message, "error");
+      // Error handling is already done in addResult context
+      console.error("Failed to add result:", error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -112,8 +118,12 @@ const AddResultModal: React.FC = function () {
           </div>
         </Modal.Body>
         <Modal.Footer>
-          <Button color="primary" onClick={handleAddResult}>
-            Add result
+          <Button 
+            color="primary" 
+            onClick={handleAddResult}
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? "Adding..." : "Add result"}
           </Button>
         </Modal.Footer>
       </Modal>

@@ -80,7 +80,7 @@ export function ResultProvider({ children }: PropsWithChildren) {
     handleRealtimeChanges
   );
 
-  const processResult = useCallback(async (result: ResultInsert, resultId: number): Promise<void> => {
+  const processResult = useCallback(async (result: ResultInsert, resultId: number): Promise<string[]> => {
     if (!result.result || !result.category_id || !result.target) {
       throw new Error("Missing required result fields");
     }
@@ -114,6 +114,8 @@ export function ResultProvider({ children }: PropsWithChildren) {
       bakis: freshBakis?.length
     });
 
+    const skippedUsers: string[] = [];
+    
     for (const parsedLine of parsedLines) {
       console.log("\nProcessing line:", parsedLine);
       
@@ -130,7 +132,8 @@ export function ResultProvider({ children }: PropsWithChildren) {
           username: u.email.split("@")[0].toLowerCase(),
           fullEmail: u.email
         })));
-        throw new Error(`User not found: ${parsedLine.username}`);
+        skippedUsers.push(parsedLine.username);
+        continue; // Skip this line and continue with the next one
       }
 
       console.log("Found user:", {
@@ -203,6 +206,13 @@ export function ResultProvider({ children }: PropsWithChildren) {
         await addTransaction(transaction);
       }
     }
+
+    // Log any skipped users for visibility
+    if (skippedUsers.length > 0) {
+      console.warn(`Skipped ${skippedUsers.length} user(s) not found:`, skippedUsers);
+    }
+
+    return skippedUsers;
   }, [addTransaction, getOrCreateAccountBalance, getOrCreateBaki, users]);
 
   const addResult = useCallback(async (result: ResultInsert) => {
@@ -229,8 +239,11 @@ export function ResultProvider({ children }: PropsWithChildren) {
         data: createdResult
       });
 
-      await processResult(result, createdResult.id);
-      showAlert("Result processed successfully", "success");
+      const skippedUsers = await processResult(result, createdResult.id);
+      const message = skippedUsers.length > 0 
+        ? `Result processed successfully. ${skippedUsers.length} user(s) were skipped (not found): ${skippedUsers.join(", ")}`
+        : "Result processed successfully";
+      showAlert(message, "success");
     } catch (error) {
       console.error("Error adding result:", error);
       showAlert(error instanceof Error ? error.message : "Error adding result", "error");
@@ -298,7 +311,7 @@ export function ResultProvider({ children }: PropsWithChildren) {
         data: result
       });
 
-      await processResult(result, result.id);
+      const skippedUsers = await processResult(result, result.id);
 
       const { error } = await supabase
         .from("results")
@@ -307,7 +320,10 @@ export function ResultProvider({ children }: PropsWithChildren) {
 
       if (error) throw error;
 
-      showAlert("Result updated successfully", "success");
+      const message = skippedUsers.length > 0 
+        ? `Result updated successfully. ${skippedUsers.length} user(s) were skipped (not found): ${skippedUsers.join(", ")}`
+        : "Result updated successfully";
+      showAlert(message, "success");
     } catch (error) {
       console.error("Error updating result:", error);
       showAlert(error instanceof Error ? error.message : "Error updating result", "error");

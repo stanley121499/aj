@@ -20,15 +20,25 @@ interface EditResultModalProps {
 
 const EditResultModal: React.FC<EditResultModalProps> = ({ result }) => {
   const [isOpen, setOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { updateResult } = useResultContext();
   const { showAlert } = useAlertContext();
   const { categories } = useCategoryContext();
   const [resultData, setResultData] = useState<Result>(result);
 
   const handleUpdateResult = async () => {
-    await updateResult(resultData)
-    setOpen(false);
-    showAlert("Result updated successfully", "success");
+    if (isSubmitting) return; // Prevent multiple submissions
+    
+    setIsSubmitting(true);
+    try {
+      await updateResult(resultData);
+      setOpen(false); // Only close modal on success
+    } catch (error) {
+      // Error handling is already done in updateResult context
+      console.error("Failed to update result:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -78,8 +88,12 @@ const EditResultModal: React.FC<EditResultModalProps> = ({ result }) => {
           </div>
         </Modal.Body>
         <Modal.Footer>
-          <Button color="primary" onClick={() => handleUpdateResult()}>
-            Save all
+          <Button 
+            color="primary" 
+            onClick={() => handleUpdateResult()}
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? "Saving..." : "Save all"}
           </Button>
         </Modal.Footer>
       </Modal>
