@@ -4,6 +4,7 @@ import { useAlertContext } from "../../context/AlertContext";
 import { useAccountBalanceContext } from "../../context/AccountBalanceContext";
 import { useAppSettingsContext } from "../../context/AppSettingsContext";
 import { useAuthContext } from "../../context/AuthContext";
+import { useBakiContext } from "../../context/BakiContext";
 import { useCategoryContext } from "../../context/CategoryContext";
 import { useTransactionContext } from "../../context/TransactionContext";
 import { useUserContext } from "../../context/UserContext";
@@ -13,7 +14,10 @@ import {
   signedDeltaToTransactionType,
 } from "../../utils/balanceLanguage";
 import { supabase } from "../../utils/supabaseClient";
-import type { Transaction } from "../../types/transaction";
+import type { Transaction, TransactionTarget } from "../../types/transaction";
+
+/** Ledger targets supported by the opening-balances CSV. */
+type OpeningLedgerTarget = Extract<TransactionTarget, "account_balance" | "baki">;
 
 /** One preview row after CSV parse and lookup. */
 interface OpeningPreviewRow {
@@ -21,8 +25,11 @@ interface OpeningPreviewRow {
   categoryName: string;
   categoryId: number;
   userId: string;
+  /** Which balance the row sets (account_balance or baki). */
+  ledgerTarget: OpeningLedgerTarget;
   current: number;
-  target: number;
+  /** Signed balance the operator wants after import. */
+  targetBalance: number;
   delta: number;
   error: string | null;
 }
@@ -31,15 +38,47 @@ interface ParsedCsvRow {
   username: string;
   category: string;
   balance: number;
+  ledgerTarget: OpeningLedgerTarget;
+}
+
+/**
+ * Human label for a ledger target column value.
+ * @param ledgerTarget - account_balance or baki
+ * @returns Short label for UI
+ */
+function formatLedgerTargetLabel(ledgerTarget: OpeningLedgerTarget): string {
+  return ledgerTarget === "baki" ? "Baki" : "Account";
+}
+
+/**
+ * Parses and validates the optional CSV `target` cell.
+ * @param raw - Raw target field (may be empty when column omitted)
+ * @returns Normalized ledger target, or null when invalid
+ */
+function parseLedgerTarget(raw: string): OpeningLedgerTarget | null {
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === "" || normalized === "account_balance") {
+    return "account_balance";
+  }
+  if (normalized === "baki") {
+    return "baki";
+  }
+  return null;
 }
 
 /**
  * Downloads a CSV template for opening-balance import.
- * Columns: username, category, balance (signed target; + = they owe).
+ * Baki off: username, category, balance.
+ * Baki on: username, category, balance, target (account_balance|baki).
+ * @param isBakiEnabled - Whether Baki feature is on
  */
-function downloadOpeningBalancesTemplate(): void {
-  const header = "username,category,balance\n";
-  const example = "alice,Default,100\nbob,Default,-50\n";
+function downloadOpeningBalancesTemplate(isBakiEnabled: boolean): void {
+  const header = isBakiEnabled
+    ? "username,category,balance,target\n"
+    : "username,category,balance\n";
+  const example = isBakiEnabled
+    ? "alice,Default,100,account_balance\nbob,Default,-50,baki\n"
+    : "alice,Default,100\nbob,Default,-50\n";
   const blob = new Blob([header + example], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -87,10 +126,14 @@ function splitCsvLine(line: string): string[] {
 
 /**
  * Parses a CSV string into opening-balance rows.
+ * Required columns: username, category, balance.
+ * Optional column: target (account_balance|baki). Defaults to account_balance.
+ * When Baki is off, rows with target=baki throw a clear error.
  * @param csvText - Raw CSV file contents
+ * @param isBakiEnabled - Whether Baki feature is on
  * @returns Parsed rows
  */
-function parseOpeningCsv(csvText: string): ParsedCsvRow[] {
+function parseOpeningCsv(csvText: string, isBakiEnabled: boolean): ParsedCsvRow[] {
   const lines = csvText
     .split(/\r?\n/)
     .map((line) => line.trim())
@@ -104,6 +147,7 @@ function parseOpeningCsv(csvText: string): ParsedCsvRow[] {
   const usernameIdx = headers.indexOf("username");
   const categoryIdx = headers.indexOf("category");
   const balanceIdx = headers.indexOf("balance");
+  const targetIdx = headers.indexOf("target");
 
   if (usernameIdx < 0 || categoryIdx < 0 || balanceIdx < 0) {
     throw new Error("CSV must include username, category, balance columns");
@@ -115,8 +159,9 @@ function parseOpeningCsv(csvText: string): ParsedCsvRow[] {
     const username = (fields[usernameIdx] ?? "").trim();
     const category = (fields[categoryIdx] ?? "").trim();
     const balanceRaw = (fields[balanceIdx] ?? "").trim();
+    const targetRaw = targetIdx >= 0 ? (fields[targetIdx] ?? "").trim() : "";
 
-    if (!username && !category && !balanceRaw) {
+    if (!username && !category && !balanceRaw && !targetRaw) {
       continue;
     }
 
@@ -127,7 +172,20 @@ function parseOpeningCsv(csvText: string): ParsedCsvRow[] {
       );
     }
 
-    rows.push({ username, category, balance });
+    const ledgerTarget = parseLedgerTarget(targetRaw);
+    if (ledgerTarget === null) {
+      throw new Error(
+        `Invalid target (use account_balance or baki): ${lines[i]}`
+      );
+    }
+
+    if (ledgerTarget === "baki" && !isBakiEnabled) {
+      throw new Error(
+        `Baki is disabled — cannot import baki rows (line: ${lines[i]})`
+      );
+    }
+
+    rows.push({ username, category, balance, ledgerTarget });
   }
 
   if (rows.length === 0) {
@@ -139,7 +197,7 @@ function parseOpeningCsv(csvText: string): ParsedCsvRow[] {
 
 /**
  * Admin UI: download template, upload CSV, preview diffs, confirm OPENING txs.
- * Replace semantics: prior OPENING txs for the same user×category are reversed first.
+ * Replace semantics: prior OPENING txs for the same user×category×target are reversed first.
  */
 const OpeningBalancesCard: React.FC = function () {
   const { user_detail } = useAuthContext();
@@ -147,6 +205,7 @@ const OpeningBalancesCard: React.FC = function () {
   const { users } = useUserContext();
   const { categories } = useCategoryContext();
   const { accountBalances, getOrCreateAccountBalance } = useAccountBalanceContext();
+  const { bakis, getOrCreateBaki } = useBakiContext();
   const { isBakiEnabled } = useAppSettingsContext();
   const { transactions, addTransaction, deleteTransaction } = useTransactionContext();
   const [previewRows, setPreviewRows] = useState<OpeningPreviewRow[]>([]);
@@ -165,8 +224,17 @@ const OpeningBalancesCard: React.FC = function () {
     };
   }, [previewRows]);
 
+  const showLedgerTargetColumn = useMemo(
+    () =>
+      isBakiEnabled ||
+      previewRows.some((row) => row.ledgerTarget === "baki"),
+    [isBakiEnabled, previewRows]
+  );
+
   /**
    * Builds preview rows from parsed CSV against live users/categories/balances.
+   * @param parsedRows - Rows from parseOpeningCsv
+   * @returns Preview rows with current/target/delta or row errors
    */
   const buildPreview = useCallback(
     (parsedRows: ParsedCsvRow[]): OpeningPreviewRow[] => {
@@ -185,8 +253,9 @@ const OpeningBalancesCard: React.FC = function () {
             categoryName: row.category,
             categoryId: 0,
             userId: "",
+            ledgerTarget: row.ledgerTarget,
             current: 0,
-            target: row.balance,
+            targetBalance: row.balance,
             delta: 0,
             error: `User not found: ${row.username}`,
           };
@@ -198,36 +267,60 @@ const OpeningBalancesCard: React.FC = function () {
             categoryName: row.category,
             categoryId: 0,
             userId: user.id,
+            ledgerTarget: row.ledgerTarget,
             current: 0,
-            target: row.balance,
+            targetBalance: row.balance,
             delta: 0,
             error: `Category not found: ${row.category}`,
           };
         }
 
-        const balanceRow = accountBalances.find(
-          (ab) => ab.user_id === user.id && ab.category_id === category.id
-        );
+        if (row.ledgerTarget === "baki" && !isBakiEnabled) {
+          return {
+            username: row.username,
+            categoryName: category.name,
+            categoryId: category.id,
+            userId: user.id,
+            ledgerTarget: row.ledgerTarget,
+            current: 0,
+            targetBalance: row.balance,
+            delta: 0,
+            error: "Baki is disabled — cannot import baki rows",
+          };
+        }
 
-        const current = balanceRow?.balance ?? 0;
-        const target = row.balance;
-        const delta = target - current;
+        const current =
+          row.ledgerTarget === "baki"
+            ? (bakis.find(
+                (b) => b.user_id === user.id && b.category_id === category.id
+              )?.balance ?? 0)
+            : (accountBalances.find(
+                (ab) => ab.user_id === user.id && ab.category_id === category.id
+              )?.balance ?? 0);
+
+        const targetBalance = row.balance;
+        const delta = targetBalance - current;
 
         return {
           username: row.username,
           categoryName: category.name,
           categoryId: category.id,
           userId: user.id,
+          ledgerTarget: row.ledgerTarget,
           current,
-          target,
+          targetBalance,
           delta,
           error: null,
         };
       });
     },
-    [users, categories, accountBalances]
+    [users, categories, accountBalances, bakis, isBakiEnabled]
   );
 
+  /**
+   * Reads an uploaded CSV and builds the preview table.
+   * @param event - File input change event
+   */
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) {
@@ -238,7 +331,7 @@ const OpeningBalancesCard: React.FC = function () {
     reader.onload = () => {
       try {
         const text = typeof reader.result === "string" ? reader.result : "";
-        const parsed = parseOpeningCsv(text);
+        const parsed = parseOpeningCsv(text, isBakiEnabled);
         setPreviewRows(buildPreview(parsed));
       } catch (error) {
         setPreviewRows([]);
@@ -255,16 +348,24 @@ const OpeningBalancesCard: React.FC = function () {
   };
 
   /**
-   * Finds prior OPENING transactions for a user × category on account_balance.
+   * Finds prior OPENING transactions for a user × category × ledger target.
+   * @param userId - User id
+   * @param categoryId - Category id
+   * @param ledgerTarget - account_balance or baki
+   * @returns Matching OPENING transactions
    */
   const findPriorOpenings = useCallback(
-    (userId: string, categoryId: number): Transaction[] => {
+    (
+      userId: string,
+      categoryId: number,
+      ledgerTarget: OpeningLedgerTarget
+    ): Transaction[] => {
       return transactions.filter(
         (tx) =>
           tx.source === "OPENING" &&
           tx.user_id === userId &&
           tx.category_id === categoryId &&
-          tx.target === "account_balance"
+          tx.target === ledgerTarget
       );
     },
     [transactions]
@@ -287,9 +388,50 @@ const OpeningBalancesCard: React.FC = function () {
     setIsConfirming(true);
     try {
       for (const row of validRows) {
-        const prior = findPriorOpenings(row.userId, row.categoryId);
+        if (row.ledgerTarget === "baki" && !isBakiEnabled) {
+          throw new Error("Baki is disabled — cannot import baki rows");
+        }
+
+        const prior = findPriorOpenings(
+          row.userId,
+          row.categoryId,
+          row.ledgerTarget
+        );
         for (const tx of prior) {
           await deleteTransaction(tx);
+        }
+
+        if (row.ledgerTarget === "baki") {
+          const baki = await getOrCreateBaki(row.userId, row.categoryId);
+
+          const { data: fresh, error: freshError } = await supabase
+            .from("bakis")
+            .select("balance,id")
+            .eq("id", baki.id)
+            .single();
+
+          if (freshError || !fresh) {
+            throw new Error(
+              `Failed to refresh Baki for ${row.username} / ${row.categoryName}`
+            );
+          }
+
+          const delta = row.targetBalance - fresh.balance;
+          if (delta === 0) {
+            continue;
+          }
+
+          const { type, amount } = signedDeltaToTransactionType(delta);
+          await addTransaction({
+            user_id: row.userId,
+            category_id: row.categoryId,
+            amount,
+            type,
+            target: "baki",
+            source: "OPENING",
+            baki_id: fresh.id,
+          });
+          continue;
         }
 
         const accountBalance = await getOrCreateAccountBalance(
@@ -309,7 +451,7 @@ const OpeningBalancesCard: React.FC = function () {
           );
         }
 
-        const delta = row.target - fresh.balance;
+        const delta = row.targetBalance - fresh.balance;
         if (delta === 0) {
           continue;
         }
@@ -352,14 +494,16 @@ const OpeningBalancesCard: React.FC = function () {
         <p className="mb-4 text-sm font-normal text-gray-500 dark:text-gray-400">
           Import a CSV of signed targets (positive = they owe, negative = we owe them).
           Each row posts an audit-friendly OPENING transaction. Re-import replaces prior
-          OPENING rows for the same user and category.
+          OPENING rows for the same user, category, and target.
           {isBakiEnabled
-            ? " Baki is on; this import still sets Account balance only."
-            : " Baki is off — Account balance only."}
+            ? " Columns: username, category, balance, target — where target is account_balance or baki."
+            : " Columns: username, category, balance (Account balance only; Baki rows are rejected while Baki is off)."}
         </p>
 
         <div className="mb-4 flex flex-wrap items-center gap-3">
-          <Button color="gray" onClick={downloadOpeningBalancesTemplate}>
+          <Button
+            color="gray"
+            onClick={() => downloadOpeningBalancesTemplate(isBakiEnabled)}>
             Download CSV template
           </Button>
           <div>
@@ -389,15 +533,23 @@ const OpeningBalancesCard: React.FC = function () {
                 <Table.Head>
                   <Table.HeadCell>User</Table.HeadCell>
                   <Table.HeadCell>Category</Table.HeadCell>
+                  {showLedgerTargetColumn && (
+                    <Table.HeadCell>Target</Table.HeadCell>
+                  )}
                   <Table.HeadCell>Current → Target</Table.HeadCell>
                   <Table.HeadCell>Status</Table.HeadCell>
                 </Table.Head>
                 <Table.Body>
                   {previewRows.map((row) => (
                     <Table.Row
-                      key={`${row.username}-${row.categoryName}-${row.target}`}>
+                      key={`${row.username}-${row.categoryName}-${row.ledgerTarget}-${row.targetBalance}`}>
                       <Table.Cell>{row.username}</Table.Cell>
                       <Table.Cell>{row.categoryName}</Table.Cell>
+                      {showLedgerTargetColumn && (
+                        <Table.Cell>
+                          {formatLedgerTargetLabel(row.ledgerTarget)}
+                        </Table.Cell>
+                      )}
                       <Table.Cell>
                         {row.error
                           ? "—"

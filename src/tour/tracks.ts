@@ -165,7 +165,8 @@ export const TOUR_TRACKS: TourTrack[] = [
   {
     id: "clean-start",
     title: "Clean-start opening balances",
-    summary: "CSV import posts OPENING transactions to set signed targets.",
+    summary:
+      "CSV import posts OPENING transactions to set signed targets (Account balance, and Baki when enabled).",
     roles: ["admin"],
     steps: [
       {
@@ -179,7 +180,7 @@ export const TOUR_TRACKS: TourTrack[] = [
       {
         id: "cs-2",
         title: "Opening balances",
-        tip: "Download the template, set username / category / balance, then preview and confirm. Re-import replaces prior OPENING for the same user × category.",
+        tip: "Download the template, set username / category / balance. When Baki is on, include target (account_balance or baki). Preview and confirm; re-import replaces prior OPENING for the same user × category × target.",
         route: "/users/settings",
         target: "opening-balances",
         placement: "top",
