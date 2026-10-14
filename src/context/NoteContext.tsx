@@ -11,6 +11,7 @@ import { supabase } from "../utils/supabaseClient";
 import { Database } from "../../database.types";
 import { useAlertContext } from "./AlertContext";
 import { useAccountBalanceContext } from "./AccountBalanceContext";
+import { useAppSettingsContext } from "./AppSettingsContext";
 import { useBakiContext } from "./BakiContext";
 import { useUserContext, User } from "./UserContext";
 import { useTransactionContext } from "./TransactionContext";
@@ -52,6 +53,7 @@ export function NoteProvider({ children }: Readonly<PropsWithChildren>) {
   const { users } = useUserContext();
   const { addTransaction } = useTransactionContext();
   const { bakis, addBaki } = useBakiContext();
+  const { isBakiEnabled } = useAppSettingsContext();
 
   useEffect(() => {
     const fetchNotes = async () => {
@@ -93,6 +95,11 @@ export function NoteProvider({ children }: Readonly<PropsWithChildren>) {
 
   const addNote = useCallback(async (note: NoteInsert) => {
     try {
+      if (note.target === "baki" && !isBakiEnabled) {
+        showAlert("Baki is currently disabled", "error");
+        return;
+      }
+
       const { data, error } = await supabase
         .from("notes")
         .insert(note)
@@ -115,7 +122,7 @@ export function NoteProvider({ children }: Readonly<PropsWithChildren>) {
     } catch (error) {
       handleNoteError(error, "adding note", showAlert);
     }
-  }, [showAlert, trackOperation]);
+  }, [showAlert, trackOperation, isBakiEnabled]);
 
   const deleteNote = useCallback(async (note: Note) => {
     try {
@@ -213,6 +220,11 @@ export function NoteProvider({ children }: Readonly<PropsWithChildren>) {
     }
 
     try {
+      if (note.target === "baki" && !isBakiEnabled) {
+        showAlert("Baki is currently disabled", "error");
+        return;
+      }
+
       validateNote(note);
 
       if (note.target === "account_balance") {
@@ -231,7 +243,7 @@ export function NoteProvider({ children }: Readonly<PropsWithChildren>) {
       handleNoteError(error, "approving note", showAlert);
       throw error;
     }
-  }, [users, showAlert, handleAccountBalanceNote, handleBakiNote, updateNote]);
+  }, [users, showAlert, handleAccountBalanceNote, handleBakiNote, updateNote, isBakiEnabled]);
 
   const rejectNote = useCallback(async (note: Note) => {
     try {

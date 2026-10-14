@@ -29,8 +29,12 @@ const SignInPage: FC = function () {
       const result = await signIn(email, password);
 
       if (result.error) {
-        console.error("Sign in error:", result.error.message);
-        setError(result.error.message);
+        const message =
+          result.error instanceof Error
+            ? result.error.message
+            : "Sign in failed. Please check your credentials.";
+        console.error("Sign in error:", message);
+        setError(message);
       }
       // No need to navigate here as the useEffect will handle it when user state updates
     } catch (err) {

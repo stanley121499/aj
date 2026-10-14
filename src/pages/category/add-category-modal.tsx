@@ -20,9 +20,19 @@ const AddCategoryModal: React.FC = function () {
     name: "",
   });
 
+  /**
+   * Validates and submits a new category.
+   * Rejects blank/whitespace-only names so empty categories cannot be created.
+   */
   const handleAddCategory = async () => {
+    const trimmedName = categoryData.name.trim();
+    if (trimmedName === "") {
+      showAlert("Category name cannot be empty", "error");
+      return;
+    }
+
     try {
-      await addCategory(categoryData);
+      await addCategory({ ...categoryData, name: trimmedName });
       setOpen(false);
       setCategoryData({ name: "" });
       showAlert("Category added successfully", "success");

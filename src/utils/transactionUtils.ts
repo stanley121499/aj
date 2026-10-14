@@ -23,21 +23,17 @@ export function validateTransaction(transaction: TransactionInsert): boolean {
 }
 
 /**
- * Calculates the balance change based on amount and transaction type
- * For positive amounts: User owes boss (DEBIT)
- * For negative amounts: Boss owes user (CREDIT)
- * @param amount - The transaction amount
+ * Calculates the balance change based on amount and transaction type.
+ * Runtime truth: debit → balance up (+amount); credit → balance down (−amount).
+ * @param amount - The transaction amount (stored positive)
  * @param type - The transaction type (debit/credit)
- * @returns The balance change amount
+ * @returns The signed balance change amount
  */
 export function calculateBalanceChange(amount: number, type: "debit" | "credit"): number {
-  // For positive amounts: User owes boss (DEBIT)
-  // For negative amounts: Boss owes user (CREDIT)
   if (type === "debit") {
-    return amount; // Positive amount means user owes boss
-  } else {
-    return -amount; // Negative amount means boss owes user
+    return amount;
   }
+  return -amount;
 }
 
 /**
@@ -62,7 +58,8 @@ export function createTransaction(
 ): TransactionInsert {
   const baseTransaction: TransactionInsert = {
     amount,
-    type: amount > 0 ? "debit" : "credit", // Positive = user owes boss (DEBIT), Negative = boss owes user (CREDIT)
+    // Result-style mapping: positive → debit (balance up); negative → credit (balance down)
+    type: amount > 0 ? "debit" : "credit",
     user_id: userId,
     category_id: categoryId,
     source,

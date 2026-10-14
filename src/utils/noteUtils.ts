@@ -20,7 +20,8 @@ export const createBalanceTransaction = (
   user_id: user.id,
   account_balance_id: accountBalance.id,
   amount: Math.abs(note.amount),
-  type: note.amount >= 0 ? "credit" : "debit", // Positive: user pays boss (credit), Negative: boss pays user (debit)
+  // Positive note (money in) → credit → balance down; negative → debit → balance up
+  type: note.amount >= 0 ? "credit" : "debit",
   target: "account_balance",
   category_id: note.category_id,
   source: "NOTE",
@@ -41,7 +42,8 @@ export const createBakiTransaction = (
   user_id: user.id,
   baki_id: baki.id,
   amount: Math.abs(note.amount),
-  type: note.amount >= 0 ? "credit" : "debit", // Positive: user pays boss (credit), Negative: boss pays user (debit)
+  // Positive note (money in) → credit → balance down; negative → debit → balance up
+  type: note.amount >= 0 ? "credit" : "debit",
   target: "baki",
   category_id: note.category_id,
   source: "NOTE",

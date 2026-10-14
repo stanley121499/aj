@@ -2,8 +2,12 @@ import React, { createContext, useContext, useEffect, useState, PropsWithChildre
 import { supabase } from "../utils/supabaseClient";
 import { Database } from "../../database.types";
 import { useAlertContext } from "./AlertContext";
+import { useAppSettingsContext } from "./AppSettingsContext";
 import { useAuthContext } from "./AuthContext";
 import { useRealtimeSubscription } from "../utils/useRealtimeSubscription";
+
+/** Shared error message when Baki mutations are blocked by the kill-switch. */
+const BAKI_DISABLED_MESSAGE = "Baki is currently disabled";
 
 export type Baki = Database['public']['Tables']['bakis']['Row'];
 export type Bakis = { bakis: Baki[] };
@@ -27,11 +31,20 @@ export function BakiProvider({ children }: PropsWithChildren) {
   const [loading, setLoading] = useState(true);
   const { showAlert } = useAlertContext();
   const { user } = useAuthContext();
+  const { isBakiEnabled } = useAppSettingsContext();
   const [currentUserBaki, setCurrentUserBaki] = useState<Baki[]>([]);
-  
 
   useEffect(() => {
+    // When Baki is off, clear local state and skip fetches/alerts for bakis.
+    if (!isBakiEnabled) {
+      setBakis([]);
+      setCurrentUserBaki([]);
+      setLoading(false);
+      return;
+    }
+
     const fetchBakis = async () => {
+      setLoading(true);
       const { data: bakis, error } = await supabase
         .from('bakis')
         .select('*');
@@ -47,9 +60,13 @@ export function BakiProvider({ children }: PropsWithChildren) {
     };
 
     fetchBakis();
-  }, [showAlert, user?.id]);
+  }, [showAlert, user?.id, isBakiEnabled]);
 
   const handleRealtimeChanges = useCallback((payload: { eventType: string; new: Baki; old: Baki }) => {
+    if (!isBakiEnabled) {
+      return;
+    }
+
     setBakis(prev => {
       switch (payload.eventType) {
         case 'INSERT':
@@ -62,14 +79,20 @@ export function BakiProvider({ children }: PropsWithChildren) {
           return prev;
       }
     });
-  }, []);
+  }, [isBakiEnabled]);
 
   const trackOperation = useRealtimeSubscription<Baki>(
     { table: "bakis" },
-    handleRealtimeChanges
+    handleRealtimeChanges,
+    [isBakiEnabled]
   );
 
   const addBaki = useCallback(async (baki: BakiInsert) => {
+    if (!isBakiEnabled) {
+      showAlert(BAKI_DISABLED_MESSAGE, "error");
+      return undefined;
+    }
+
     const { data, error } = await supabase
       .from('bakis')
       .insert(baki)
@@ -92,9 +115,14 @@ export function BakiProvider({ children }: PropsWithChildren) {
     }
 
     return data;
-  }, [showAlert, trackOperation]);
+  }, [showAlert, trackOperation, isBakiEnabled]);
 
   const deleteBaki = useCallback(async (baki: Baki) => {
+    if (!isBakiEnabled) {
+      showAlert(BAKI_DISABLED_MESSAGE, "error");
+      return;
+    }
+
     trackOperation({
       id: baki.id,
       type: "DELETE",
@@ -110,9 +138,14 @@ export function BakiProvider({ children }: PropsWithChildren) {
       console.error('Error deleting baki:', error);
       showAlert('Error deleting baki', 'error');
     }
-  }, [showAlert, trackOperation]);
+  }, [showAlert, trackOperation, isBakiEnabled]);
 
   const updateBaki = useCallback(async (baki: Baki) => {
+    if (!isBakiEnabled) {
+      showAlert(BAKI_DISABLED_MESSAGE, "error");
+      return;
+    }
+
     trackOperation({
       id: baki.id,
       type: "UPDATE",
@@ -129,9 +162,13 @@ export function BakiProvider({ children }: PropsWithChildren) {
       console.error('Error updating baki:', error);
       showAlert('Error updating baki', 'error');
     }
-  }, [showAlert, trackOperation]);
+  }, [showAlert, trackOperation, isBakiEnabled]);
 
   const getOrCreateBaki = useCallback(async (userId: string, categoryId: number): Promise<Baki> => {
+    if (!isBakiEnabled) {
+      throw new Error(BAKI_DISABLED_MESSAGE);
+    }
+
     const existingBaki = bakis.find(
       (b) => b.user_id === userId && b.category_id === categoryId
     );
@@ -151,9 +188,14 @@ export function BakiProvider({ children }: PropsWithChildren) {
     }
 
     return newBaki;
-  }, [bakis, addBaki]);
+  }, [bakis, addBaki, isBakiEnabled]);
 
   const updateBalanceWithTransaction = useCallback(async (baki: Baki, amount: number, type: "debit" | "credit") => {
+    if (!isBakiEnabled) {
+      showAlert(BAKI_DISABLED_MESSAGE, "error");
+      throw new Error(BAKI_DISABLED_MESSAGE);
+    }
+
     const balanceChange = type === "debit" ? amount : -amount;
     const newBalance = baki.balance + balanceChange;
     const updatedBaki = { ...baki, balance: newBalance };
@@ -175,7 +217,7 @@ export function BakiProvider({ children }: PropsWithChildren) {
       showAlert("Error updating baki", "error");
       throw updateError;
     }
-  }, [showAlert, trackOperation]);
+  }, [showAlert, trackOperation, isBakiEnabled]);
 
   const value = {
     bakis,

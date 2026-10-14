@@ -3,9 +3,9 @@ import React from "react";
 import NavbarSidebarLayout from "../layouts/navbar-sidebar";
 import BalanceCards from "../components/dashboard/balance-cards";
 import CreateNoteForm from "../components/dashboard/create-note-form";
-import { Button } from "flowbite-react";
 import { useNoteContext } from "../context/NoteContext";
 import { useAccountBalanceContext } from "../context/AccountBalanceContext";
+import { useAppSettingsContext } from "../context/AppSettingsContext";
 import { useBakiContext } from "../context/BakiContext";
 import { useAlertContext } from "../context/AlertContext";
 import { useTransactionContext } from "../context/TransactionContext";
@@ -18,6 +18,7 @@ const DashboardPage: React.FC = function () {
   const { showAlert } = useAlertContext();
   const { transactions, deleteTransaction } = useTransactionContext();
   const { results, updateResult } = useResultContext();
+  const { isBakiEnabled } = useAppSettingsContext();
 
   const handleResetCalculations = async () => {
     try {
@@ -44,21 +45,25 @@ const DashboardPage: React.FC = function () {
       }
       console.log("All account balances reset to 0");
 
-      console.log(`Found ${bakis.length} bakis to reset`);
-      for (const baki of bakis) {
-        if (baki.balance !== 0) {
-          console.log(`Resetting baki ${baki.id} to 0...`);
-          await updateBaki({
-            ...baki,
-            balance: 0,
-          });
+      if (isBakiEnabled) {
+        console.log(`Found ${bakis.length} bakis to reset`);
+        for (const baki of bakis) {
+          if (baki.balance !== 0) {
+            console.log(`Resetting baki ${baki.id} to 0...`);
+            await updateBaki({
+              ...baki,
+              balance: 0,
+            });
+          }
         }
+        console.log("All bakis reset to 0");
       }
-      console.log("All bakis reset to 0");
 
       // Step 3: Process all approved notes first (they might be older)
       console.log(`Found ${notes.length} notes to process`);
-      const approvedNotes = notes.filter(note => note.status === "APPROVED")
+      const approvedNotes = notes
+        .filter((note) => note.status === "APPROVED")
+        .filter((note) => isBakiEnabled || note.target !== "baki")
         .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
       
       for (const note of approvedNotes) {
@@ -70,6 +75,7 @@ const DashboardPage: React.FC = function () {
       // Step 4: Process all results in chronological order
       console.log(`Found ${results.length} results to process`);
       const sortedResults = [...results]
+        .filter((result) => isBakiEnabled || result.target !== "baki")
         .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
       
       for (const result of sortedResults) {
@@ -93,12 +99,7 @@ const DashboardPage: React.FC = function () {
           <h1 className="text-xl font-semibold text-gray-900 dark:text-white sm:text-2xl">
             Dashboard
           </h1>
-          {/* <Button
-            color="failure"
-            onClick={handleResetCalculations}
-            className="bg-red-600 hover:bg-red-700">
-            Reset Calculations
-          </Button> */}
+          {/* Reset Calculations stays disabled — can duplicate note transactions. */}
         </div>
         <div className="col-span-full xl:col-auto">
           <BalanceCards />

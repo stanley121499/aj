@@ -12,17 +12,37 @@ import {
 } from "react-icons/hi";
 import NavbarSidebarLayout from "../../layouts/navbar-sidebar";
 import LoadingPage from "../pages/loading";
-import { useUserContext, Users } from "../../context/UserContext";
+import { useAppSettingsContext } from "../../context/AppSettingsContext";
+import { useUserContext, User } from "../../context/UserContext";
 import UpdateUserBalanceModal from "./edit-user-modal";
 
 const OrangeListPage: FC = function () {
   const { users, loading } = useUserContext();
+  const { isBakiEnabled } = useAppSettingsContext();
 
   const [searchValue, setSearchValue] = React.useState("");
 
-  if (loading || !users || users.length === 0) {
+  if (loading) {
     return <LoadingPage />;
   }
+
+  const filteredUsers = users
+    .filter((user) => {
+      const hasNegativeAccountBalance =
+        user.account_balance.reduce(
+          (acc, account_balance) => acc + account_balance.balance,
+          0
+        ) < 0;
+      if (!isBakiEnabled) {
+        return hasNegativeAccountBalance;
+      }
+      const hasNegativeBaki =
+        user.baki.reduce((acc, baki) => acc + baki.balance, 0) < 0;
+      return hasNegativeBaki || hasNegativeAccountBalance;
+    })
+    .filter((user) =>
+      user.email.toLowerCase().includes(searchValue.toLowerCase())
+    );
 
   return (
     <NavbarSidebarLayout>
@@ -36,19 +56,24 @@ const OrangeListPage: FC = function () {
                   <span className="dark:text-white">Home</span>
                 </div>
               </Breadcrumb.Item>
-              <Breadcrumb.Item>All User</Breadcrumb.Item>
+              <Breadcrumb.Item>Orange</Breadcrumb.Item>
             </Breadcrumb>
-            <h1 className="text-xl font-semibold text-gray-900 dark:text-white sm:text-2xl">
-              All Users
+            <h1
+              data-tour="orange-page"
+              className="text-xl font-semibold text-gray-900 dark:text-white sm:text-2xl">
+              Orange
             </h1>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              Users with below-zero balances. Adjustments use signed math (increase → balance up, decrease → balance down).
+            </p>
           </div>
           <div className="sm:flex">
-            <div className="mb-3 hidden items-center dark:divide-gray-700 sm:mb-0 sm:flex sm:divide-x sm:divide-gray-100">
-              <form className="lg:pr-3">
+            <div className="mb-3 flex items-center dark:divide-gray-700 sm:mb-0 sm:divide-x sm:divide-gray-100">
+              <form className="w-full lg:pr-3">
                 <Label htmlFor="users-search" className="sr-only">
                   Search
                 </Label>
-                <div className="relative mt-1 lg:w-64 xl:w-96">
+                <div className="relative mt-1 w-full lg:w-64 xl:w-96">
                   <TextInput
                     id="users-search"
                     name="users-search"
@@ -68,11 +93,8 @@ const OrangeListPage: FC = function () {
         <div className="overflow-x-auto">
           <div className="inline-block min-w-full align-middle">
             <div className="overflow-hidden shadow">
-              {users.length > 0 ? (
-                <UsersTable users={users
-                  .filter((user) => user.baki.reduce((acc, baki) => acc + baki.balance, 0) < 0 || user.account_balance.reduce((acc, account_balance) => acc + account_balance.balance, 0) < 0)
-                  .filter((user) => user.email.toLowerCase().includes(searchValue.toLowerCase()))} />
-
+              {filteredUsers.length > 0 ? (
+                <UsersTable users={filteredUsers} isBakiEnabled={isBakiEnabled} />
               ) : (
                 <div className="p-4 text-center">No users found</div>
               )}
@@ -84,15 +106,18 @@ const OrangeListPage: FC = function () {
   );
 };
 
-const UsersTable: React.FC<Users> = function ({ users }) {
-  // const { deleteUser } = useUserContext();
+interface UsersTableProps {
+  users: User[];
+  isBakiEnabled: boolean;
+}
 
+const UsersTable: React.FC<UsersTableProps> = function ({ users, isBakiEnabled }) {
   return (
     <Table className="min-w-full divide-y divide-gray-200 dark:divide-gray-600">
       <Table.Head className="bg-gray-100 dark:bg-gray-700">
         <Table.HeadCell>Username</Table.HeadCell>
         <Table.HeadCell>Phone Number</Table.HeadCell>
-        <Table.HeadCell>Baki Total</Table.HeadCell>
+        {isBakiEnabled && <Table.HeadCell>Baki Total</Table.HeadCell>}
         <Table.HeadCell>Account Balance Total</Table.HeadCell>
         <Table.HeadCell>Actions</Table.HeadCell>
       </Table.Head>
@@ -101,8 +126,17 @@ const UsersTable: React.FC<Users> = function ({ users }) {
           <Table.Row key={user.id} className="hover:bg-gray-100 dark:hover:bg-gray-700">
             <Table.Cell>{user.email.split("@")[0]}</Table.Cell>
             <Table.Cell>{user.user_detail.contact_number}</Table.Cell>
-            <Table.Cell>{user.baki.reduce((acc, baki) => acc + baki.balance, 0)}</Table.Cell>
-            <Table.Cell>{user.account_balance.reduce((acc, account_balance) => acc + account_balance.balance, 0)}</Table.Cell>
+            {isBakiEnabled && (
+              <Table.Cell>
+                {user.baki.reduce((acc, baki) => acc + baki.balance, 0)}
+              </Table.Cell>
+            )}
+            <Table.Cell>
+              {user.account_balance.reduce(
+                (acc, account_balance) => acc + account_balance.balance,
+                0
+              )}
+            </Table.Cell>
             <Table.Cell>
               <div className="flex items-center gap-x-3 whitespace-nowrap">
                 <UpdateUserBalanceModal user={user} />

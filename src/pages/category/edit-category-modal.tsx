@@ -23,16 +23,26 @@ const EditCategoryModal: React.FC<EditCategoryModalProps> = ({ category }) => {
   const { showAlert } = useAlertContext();
   const [categoryData, setCategoryData] = useState<Category>(category);
 
+  /**
+   * Validates and saves category edits.
+   * Rejects blank/whitespace-only names so empty categories cannot be saved.
+   */
   const handleUpdateCategory = async () => {
+    const trimmedName = categoryData.name.trim();
+    if (trimmedName === "") {
+      showAlert("Category name cannot be empty", "error");
+      return;
+    }
+
     try {
-      await updateCategory(categoryData);
+      await updateCategory({ ...categoryData, name: trimmedName });
       setOpen(false);
       showAlert("Category updated successfully", "success");
     } catch (error) {
       console.error("Error updating category:", error);
       showAlert("Error updating category", "error");
     }
-  }
+  };
 
   return (
     <>

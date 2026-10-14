@@ -10,6 +10,7 @@ import React, {
 import { supabase } from "../utils/supabaseClient";
 import { useAlertContext } from "./AlertContext";
 import { useAccountBalanceContext } from "./AccountBalanceContext";
+import { useAppSettingsContext } from "./AppSettingsContext";
 import { useBakiContext } from "./BakiContext";
 import { Transaction, TransactionInsert } from "../types/transaction";
 import { validateTransaction } from "../utils/transactionUtils";
@@ -31,6 +32,7 @@ export function TransactionProvider({ children }: Readonly<PropsWithChildren>) {
   const { showAlert } = useAlertContext();
   const { accountBalances, updateBalanceWithTransaction: updateAccountBalanceWithTransaction } = useAccountBalanceContext();
   const { bakis, updateBalanceWithTransaction: updateBakiWithTransaction } = useBakiContext();
+  const { isBakiEnabled } = useAppSettingsContext();
 
   useEffect(() => {
     const fetchTransactions = async () => {
@@ -73,6 +75,11 @@ export function TransactionProvider({ children }: Readonly<PropsWithChildren>) {
 
   const addTransaction = useCallback(async (transaction: TransactionInsert) => {
     try {
+      if (transaction.target === "baki" && !isBakiEnabled) {
+        showAlert("Baki is currently disabled", "error");
+        return;
+      }
+
       const { data, error } = await supabase
         .from("transactions")
         .insert(transaction)
@@ -131,7 +138,7 @@ export function TransactionProvider({ children }: Readonly<PropsWithChildren>) {
       console.error("Error adding transaction:", error);
       showAlert("Error adding transaction", "error");
     }
-  }, [showAlert, trackOperation, updateAccountBalanceWithTransaction, updateBakiWithTransaction]);
+  }, [showAlert, trackOperation, updateAccountBalanceWithTransaction, updateBakiWithTransaction, isBakiEnabled]);
 
   const deleteTransaction = useCallback(async (transaction: Transaction, skipBalanceUpdate: boolean = false) => {
     try {
@@ -164,7 +171,7 @@ export function TransactionProvider({ children }: Readonly<PropsWithChildren>) {
               transaction.type === "debit" ? "credit" : "debit"
             );
           }
-        } else if (transaction.target === "baki") {
+        } else if (transaction.target === "baki" && isBakiEnabled) {
           const baki = bakis.find((b) => b.id === transaction.baki_id);
           if (baki) {
             await updateBakiWithTransaction(
@@ -179,7 +186,7 @@ export function TransactionProvider({ children }: Readonly<PropsWithChildren>) {
       console.error("Error deleting transaction:", error);
       showAlert("Error deleting transaction", "error");
     }
-  }, [showAlert, trackOperation, accountBalances, bakis, updateAccountBalanceWithTransaction, updateBakiWithTransaction]);
+  }, [showAlert, trackOperation, accountBalances, bakis, updateAccountBalanceWithTransaction, updateBakiWithTransaction, isBakiEnabled]);
 
   const updateTransaction = useCallback(async (transaction: Transaction) => {
     try {

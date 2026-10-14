@@ -7,7 +7,7 @@ import { FaUsers } from "react-icons/fa";
 import { FaRegNoteSticky } from "react-icons/fa6";
 import { GiFruitBowl } from "react-icons/gi";
 import { GrTransaction } from "react-icons/gr";
-import { HiChartPie } from "react-icons/hi";
+import { HiChartPie, HiCog, HiQuestionMarkCircle } from "react-icons/hi";
 import { IoDocumentTextOutline, IoLogOutOutline } from "react-icons/io5";
 import { useAuthContext } from "../context/AuthContext";
 import { useSidebarContext } from "../context/SidebarContext";
@@ -40,6 +40,7 @@ const ExampleSidebar: React.FC = function () {
                 <Sidebar.Item
                   href="/dashboard"
                   icon={HiChartPie}
+                  data-tour="nav-dashboard"
                   className={
                     "/dashboard" === currentPage
                       ? "bg-gray-100 dark:bg-gray-700"
@@ -52,6 +53,7 @@ const ExampleSidebar: React.FC = function () {
                 <Sidebar.Item
                   href="/transactions"
                   icon={GrTransaction}
+                  data-tour="nav-transactions"
                   className={
                     "/transactions" === currentPage
                       ? "bg-gray-100 dark:bg-gray-700"
@@ -66,6 +68,7 @@ const ExampleSidebar: React.FC = function () {
                   <Sidebar.Item
                     href="/notes"
                     icon={FaRegNoteSticky}
+                    data-tour="nav-notes"
                     className={
                       "/notes" === currentPage
                         ? "bg-gray-100 dark:bg-gray-700"
@@ -80,6 +83,7 @@ const ExampleSidebar: React.FC = function () {
                   <Sidebar.Item
                     href="/results"
                     icon={IoDocumentTextOutline}
+                    data-tour="nav-results"
                     className={
                       "/results" === currentPage
                         ? "bg-gray-100 dark:bg-gray-700"
@@ -95,6 +99,7 @@ const ExampleSidebar: React.FC = function () {
                   <Sidebar.Item
                     href="/users/list"
                     icon={FaUsers}
+                    data-tour="nav-users"
                     className={
                       "/users/list" === currentPage
                         ? "bg-gray-100 dark:bg-gray-700"
@@ -110,6 +115,7 @@ const ExampleSidebar: React.FC = function () {
                   <Sidebar.Item
                     href="/categories"
                     icon={BiSolidCategory}
+                    data-tour="nav-categories"
                     className={
                       "/categories" === currentPage
                         ? "bg-gray-100 dark:bg-gray-700"
@@ -119,18 +125,47 @@ const ExampleSidebar: React.FC = function () {
                   </Sidebar.Item>
                 )}
 
-                {/* Owe */}
+                {/* Orange — keep name */}
                 {(user_detail?.role === "admin" ||
                   user_detail?.role === "employee") && (
                   <Sidebar.Item
                     href="/orange"
                     icon={GiFruitBowl}
+                    data-tour="nav-orange"
                     className={
                       "/orange" === currentPage
                         ? "bg-gray-100 dark:bg-gray-700"
                         : ""
                     }>
                     Orange
+                  </Sidebar.Item>
+                )}
+
+                {/* Help / Get started */}
+                <Sidebar.Item
+                  href="/onboarding"
+                  icon={HiQuestionMarkCircle}
+                  data-tour="nav-help"
+                  className={
+                    currentPage.startsWith("/onboarding")
+                      ? "bg-gray-100 dark:bg-gray-700"
+                      : ""
+                  }>
+                  Help
+                </Sidebar.Item>
+
+                {/* Settings (admin only) */}
+                {user_detail?.role === "admin" && (
+                  <Sidebar.Item
+                    href="/users/settings"
+                    icon={HiCog}
+                    data-tour="nav-settings"
+                    className={
+                      "/users/settings" === currentPage
+                        ? "bg-gray-100 dark:bg-gray-700"
+                        : ""
+                    }>
+                    Settings
                   </Sidebar.Item>
                 )}
 

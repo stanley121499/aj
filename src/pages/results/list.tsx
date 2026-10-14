@@ -11,6 +11,7 @@ import { useCategoryContext } from "../../context/CategoryContext";
 import AddResultModal from "./add-result-modal";
 import EditResultModal from "./edit-result-modal";
 import DeleteResultModal from "./delete-result-modal";
+import { humanizeTarget } from "../../utils/balanceLanguage";
 
 const ResultListPage: FC = function () {
   const { results, loading, updateResult } = useResultContext();
@@ -39,19 +40,21 @@ const ResultListPage: FC = function () {
                   <span className="dark:text-white">Home</span>
                 </div>
               </Breadcrumb.Item>
-              <Breadcrumb.Item>All Result</Breadcrumb.Item>
+              <Breadcrumb.Item>All Results</Breadcrumb.Item>
             </Breadcrumb>
-            <h1 className="text-xl font-semibold text-gray-900 dark:text-white sm:text-2xl">
+            <h1
+              data-tour="results-page"
+              className="text-xl font-semibold text-gray-900 dark:text-white sm:text-2xl">
               All Results
             </h1>
           </div>
           <div className="sm:flex">
-            <div className="mb-3 hidden items-center dark:divide-gray-700 sm:mb-0 sm:flex sm:divide-x sm:divide-gray-100">
-              <form className="lg:pr-3">
+            <div className="mb-3 flex items-center dark:divide-gray-700 sm:mb-0 sm:divide-x sm:divide-gray-100">
+              <form className="w-full lg:pr-3">
                 <Label htmlFor="results-search" className="sr-only">
                   Search
                 </Label>
-                <div className="relative mt-1 lg:w-64 xl:w-96">
+                <div className="relative mt-1 w-full lg:w-64 xl:w-96">
                   <TextInput
                     id="results-search"
                     name="results-search"
@@ -121,7 +124,11 @@ const ResultsTable: React.FC<Results> = function ({ results }) {
                 )?.name
               }
             </Table.Cell>
-            <Table.Cell>{result.target}</Table.Cell>
+            <Table.Cell>
+              {result.target === "account_balance" || result.target === "baki"
+                ? humanizeTarget(result.target)
+                : result.target}
+            </Table.Cell>
             <Table.Cell>{result.result}</Table.Cell>
             <Table.Cell>
               <div className="flex items-center gap-x-3 whitespace-nowrap">

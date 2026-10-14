@@ -3,8 +3,10 @@ import { Route, Routes } from "react-router";
 import { BrowserRouter } from "react-router-dom";
 import FlowbiteWrapper from "./components/FlowbiteWrapper";
 import ProtectedRoute from "./components/ProtectedRoute";
+import RoleProtectedRoute from "./components/RoleProtectedRoute";
 import { AccountBalanceProvider } from "./context/AccountBalanceContext";
 import { AlertProvider } from "./context/AlertContext";
+import { AppSettingsProvider } from "./context/AppSettingsContext";
 import { AuthProvider } from "./context/AuthContext";
 import { BakiProvider } from "./context/BakiContext";
 import { CategoryProvider } from "./context/CategoryContext";
@@ -28,6 +30,8 @@ import { AlertComponent } from "./components/AlertComponent";
 import TransactionListPage from "./pages/transaction/list";
 import ResultListPage from "./pages/results/list";
 import OrangeListPage from "./pages/orange/list";
+import OnboardingPage from "./pages/onboarding";
+import { TourProvider } from "./context/TourContext";
 import useInactivityLogout from "./hooks/useInactivityLogout";
 
 /**
@@ -39,85 +43,117 @@ const InactivityHandler: React.FC = () => {
   return null;
 };
 
+const STAFF_ROLES = ["admin", "employee"] as const;
+const ADMIN_ROLES = ["admin"] as const;
+
 const App: React.FC = () => {
   return (
     <AlertProvider>
       <AuthProvider>
-        <CategoryProvider>
-          <UserProvider>
-            <BakiProvider>
-              <AccountBalanceProvider>
-                <TransactionProvider>
-                  <NoteProvider>
-                    <ResultProvider>
-                      <AlertComponent />
-                      <InactivityHandler />
-                      <BrowserRouter>
-                        <Routes>
-                          <Route element={<FlowbiteWrapper />}>
-                            {/* Protected Routes */}
-                            <Route element={<ProtectedRoute />}>
-                              <Route
-                                path="/dashboard"
-                                element={<DashboardPage />}
-                              />
-                              <Route
-                                path="/users/list"
-                                element={<UserListPage />}
-                              />
-                              <Route
-                                path="/users/settings"
-                                element={<UserSettingsPage />}
-                              />
-                              <Route
-                                path="/categories"
-                                element={<CategoryListPage />}
-                              />
-                              <Route path="/notes" element={<NoteListPage />} />
-                              <Route
-                                path="/transactions"
-                                element={<TransactionListPage />}
-                              />
-                              <Route
-                                path="/results"
-                                element={<ResultListPage />}
-                              />
-                              <Route
-                                path="/orange"
-                                element={<OrangeListPage />}
-                              />
-                            </Route>
+        <AppSettingsProvider>
+          <CategoryProvider>
+            <UserProvider>
+              <BakiProvider>
+                <AccountBalanceProvider>
+                  <TransactionProvider>
+                    <NoteProvider>
+                      <ResultProvider>
+                        <AlertComponent />
+                        <InactivityHandler />
+                        <BrowserRouter>
+                          <TourProvider>
+                            <Routes>
+                              <Route element={<FlowbiteWrapper />}>
+                                {/* Protected Routes */}
+                                <Route element={<ProtectedRoute />}>
+                                  <Route
+                                    path="/dashboard"
+                                    element={<DashboardPage />}
+                                  />
+                                  <Route
+                                    path="/transactions"
+                                    element={<TransactionListPage />}
+                                  />
+                                  <Route
+                                    path="/onboarding"
+                                    element={<OnboardingPage />}
+                                  />
 
-                            {/* Public Routes */}
-                            <Route path="/" element={<HomePage />} />
-                            <Route
-                              path="/pages/maintenance"
-                              element={<MaintenancePage />}
-                            />
-                            <Route
-                              path="/authentication/sign-in"
-                              element={<SignInPage />}
-                            />
+                                  {/* Staff-only — mirrors sidebar visibility */}
+                                  <Route
+                                    element={
+                                      <RoleProtectedRoute
+                                        allowedRoles={[...STAFF_ROLES]}
+                                      />
+                                    }>
+                                    <Route
+                                      path="/users/list"
+                                      element={<UserListPage />}
+                                    />
+                                    <Route
+                                      path="/categories"
+                                      element={<CategoryListPage />}
+                                    />
+                                    <Route
+                                      path="/notes"
+                                      element={<NoteListPage />}
+                                    />
+                                    <Route
+                                      path="/results"
+                                      element={<ResultListPage />}
+                                    />
+                                    <Route
+                                      path="/orange"
+                                      element={<OrangeListPage />}
+                                    />
+                                  </Route>
 
-                            {/* Legal Pages */}
-                            <Route
-                              path="/legal/privacy"
-                              element={<PrivacyPage />}
-                            />
+                                  {/* Admin-only settings (Baki + opening balances) */}
+                                  <Route
+                                    element={
+                                      <RoleProtectedRoute
+                                        allowedRoles={[...ADMIN_ROLES]}
+                                      />
+                                    }>
+                                    <Route
+                                      path="/users/settings"
+                                      element={<UserSettingsPage />}
+                                    />
+                                  </Route>
+                                </Route>
 
-                            {/* Error Handling Routes */}
-                            <Route path="/500" element={<ServerErrorPage />} />
-                            <Route path="*" element={<NotFoundPage />} />
-                          </Route>
-                        </Routes>
-                      </BrowserRouter>
-                    </ResultProvider>
-                  </NoteProvider>
-                </TransactionProvider>
-              </AccountBalanceProvider>
-            </BakiProvider>
-          </UserProvider>
-        </CategoryProvider>
+                                {/* Public Routes */}
+                                <Route path="/" element={<HomePage />} />
+                                <Route
+                                  path="/pages/maintenance"
+                                  element={<MaintenancePage />}
+                                />
+                                <Route
+                                  path="/authentication/sign-in"
+                                  element={<SignInPage />}
+                                />
+
+                                {/* Legal Pages */}
+                                <Route
+                                  path="/legal/privacy"
+                                  element={<PrivacyPage />}
+                                />
+
+                                {/* Error Handling Routes */}
+                                <Route path="/500" element={<ServerErrorPage />} />
+                                <Route path="*" element={<NotFoundPage />} />
+                              </Route>
+                            </Routes>
+                          </TourProvider>
+                        </BrowserRouter>
+                      </ResultProvider>
+                    </NoteProvider>
+                  </TransactionProvider>
+                </AccountBalanceProvider>
+              </BakiProvider>
+            </UserProvider>
+          </CategoryProvider>
+        </AppSettingsProvider>
       </AuthProvider>
     </AlertProvider>
   );

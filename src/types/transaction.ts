@@ -2,7 +2,8 @@ import { Database } from "../../database.types";
 
 export type TransactionType = "credit" | "debit";
 export type TransactionTarget = Database["public"]["Enums"]["transaction_target"];
-export type TransactionSource = "PAYOUT" | "RESULT" | "NOTE";
+/** Ledger sources; OPENING is reserved for clean-start CSV imports. */
+export type TransactionSource = "PAYOUT" | "RESULT" | "NOTE" | "OPENING";
 
 // Use the base types from database.types.ts
 export type BaseTransaction = Database["public"]["Tables"]["transactions"]["Row"];
@@ -20,15 +21,22 @@ export interface TransactionInsert extends BaseTransactionInsert {
 }
 
 /**
- * Calculates the balance change for a transaction
- * @param amount The transaction amount
- * @param type The transaction type (credit/debit)
- * @returns The actual balance change amount (positive for credit, negative for debit)
+ * Calculates the balance change for a transaction using runtime math.
+ * Debit → balance up (+amount); credit → balance down (−amount).
+ * Prefer `calculateBalanceChange` from `src/utils/transactionUtils.ts` at call sites;
+ * this export stays aligned so older imports are not inverted.
+ * @param amount - The transaction amount (stored positive)
+ * @param type - The transaction type (credit/debit)
+ * @returns Signed balance change
  */
-export const calculateBalanceChange = (amount: number, type: TransactionType): number => {
-  // For credits (boss owes user), positive amount increases user's balance
-  // For debits (user owes boss), positive amount decreases user's balance
-  return type === "credit" ? amount : -amount;
+export const calculateBalanceChange = (
+  amount: number,
+  type: TransactionType
+): number => {
+  if (type === "debit") {
+    return amount;
+  }
+  return -amount;
 };
 
 /**
@@ -64,18 +72,17 @@ export const validateTransaction = (transaction: TransactionInsert): boolean => 
 };
 
 /**
- * Normalizes a transaction amount and type
+ * Normalizes a transaction amount and type for result-style posting.
+ * Positive amount → debit (balance up); negative → credit (balance down).
  * @param amount The raw amount value
- * @returns Object containing normalized amount and type
+ * @returns Object containing normalized absolute amount and type
  */
-export const normalizeTransactionAmount = (amount: number | string): { 
-  amount: number; 
-  type: TransactionType; 
+export const normalizeTransactionAmount = (amount: number | string): {
+  amount: number;
+  type: TransactionType;
 } => {
   const numericAmount = typeof amount === "string" ? parseFloat(amount) : amount;
-  // Negative amount means boss owes user (credit)
-  // Positive amount means user owes boss (debit)
   const type: TransactionType = numericAmount < 0 ? "credit" : "debit";
-  
-  return { amount: numericAmount, type };
-}; 
+
+  return { amount: Math.abs(numericAmount), type };
+};

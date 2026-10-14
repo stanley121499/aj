@@ -41,6 +41,24 @@ export type Database = {
           },
         ]
       }
+      app_settings: {
+        Row: {
+          key: string
+          updated_at: string
+          value_boolean: boolean
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          value_boolean?: boolean
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          value_boolean?: boolean
+        }
+        Relationships: []
+      }
       bakis: {
         Row: {
           balance: number
@@ -258,18 +276,21 @@ export type Database = {
         Row: {
           birthday: string | null
           contact_number: string | null
+          onboarding_completed_at: string | null
           role: Database["public"]["Enums"]["user_role"]
           user_id: string
         }
         Insert: {
           birthday?: string | null
           contact_number?: string | null
+          onboarding_completed_at?: string | null
           role?: Database["public"]["Enums"]["user_role"]
           user_id: string
         }
         Update: {
           birthday?: string | null
           contact_number?: string | null
+          onboarding_completed_at?: string | null
           role?: Database["public"]["Enums"]["user_role"]
           user_id?: string
         }

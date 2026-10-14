@@ -63,15 +63,22 @@ export function CategoryProvider({ children }: PropsWithChildren) {
   );
 
   const addCategory = useCallback(async (category: CategoryInsert) => {
+    const trimmedName = category.name.trim();
+    if (trimmedName === "") {
+      showAlert("Category name cannot be empty", "error");
+      return;
+    }
+
+    const payload: CategoryInsert = { ...category, name: trimmedName };
     const { data, error } = await supabase
-      .from('categories')
-      .insert(category)
+      .from("categories")
+      .insert(payload)
       .select()
       .single();
 
     if (error) {
-      console.error('Error adding category:', error);
-      showAlert('Error adding category', 'error');
+      console.error("Error adding category:", error);
+      showAlert("Error adding category", "error");
       return;
     }
 
@@ -104,21 +111,28 @@ export function CategoryProvider({ children }: PropsWithChildren) {
   }, [showAlert, trackOperation]);
 
   const updateCategory = useCallback(async (category: Category) => {
+    const trimmedName = category.name.trim();
+    if (trimmedName === "") {
+      showAlert("Category name cannot be empty", "error");
+      return;
+    }
+
+    const payload: Category = { ...category, name: trimmedName };
     trackOperation({
-      id: category.id,
+      id: payload.id,
       type: "UPDATE",
       timestamp: Date.now(),
-      data: category
+      data: payload
     });
 
     const { error } = await supabase
-      .from('categories')
-      .update(category)
-      .eq('id', category.id);
+      .from("categories")
+      .update(payload)
+      .eq("id", payload.id);
 
     if (error) {
-      console.error('Error updating category:', error);
-      showAlert('Error updating category', 'error');
+      console.error("Error updating category:", error);
+      showAlert("Error updating category", "error");
     }
   }, [showAlert, trackOperation]);
 

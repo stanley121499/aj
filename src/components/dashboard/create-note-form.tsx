@@ -5,13 +5,32 @@ import { useCategoryContext } from "../../context/CategoryContext";
 import { useAuthContext } from "../../context/AuthContext";
 import { supabase } from "../../utils/supabaseClient";
 import { useAlertContext } from "../../context/AlertContext";
+import { useAppSettingsContext } from "../../context/AppSettingsContext";
+import { useAccountBalanceContext } from "../../context/AccountBalanceContext";
+import { useBakiContext } from "../../context/BakiContext";
 import { useUserContext } from "../../context/UserContext";
+import {
+  NOTE_ENTRY_TIP,
+  previewBalanceChange,
+} from "../../utils/balanceLanguage";
 
 type method = "CA" | "BT" | "CH";
 
 interface CreateNoteFormProps {
   currentUser?: boolean;
   onNoteCreated?: () => void;
+}
+
+/**
+ * Note posting: positive amount → credit → balance down; negative → debit → balance up.
+ * @param amount - Signed note amount
+ * @returns Signed balance delta
+ */
+function noteAmountToBalanceDelta(amount: number): number {
+  if (amount >= 0) {
+    return -Math.abs(amount);
+  }
+  return Math.abs(amount);
 }
 
 const CreateNoteForm: React.FC<CreateNoteFormProps> = ({ currentUser, onNoteCreated }) => {
@@ -21,6 +40,9 @@ const CreateNoteForm: React.FC<CreateNoteFormProps> = ({ currentUser, onNoteCrea
   const { showAlert } = useAlertContext();
   const { users } = useUserContext();
   const { user } = useAuthContext();
+  const { isBakiEnabled } = useAppSettingsContext();
+  const { accountBalances } = useAccountBalanceContext();
+  const { bakis } = useBakiContext();
   const [loading, setLoading] = React.useState(false);
 
   // Get the default user ID - either the current user's ID or the first user's ID from the list
@@ -47,8 +69,56 @@ const CreateNoteForm: React.FC<CreateNoteFormProps> = ({ currentUser, onNoteCrea
     }
   }, [users, currentUser, note.user_id]);
 
+  // Force account_balance target when Baki is disabled.
+  React.useEffect(() => {
+    if (!isBakiEnabled && note.target === "baki") {
+      setNote((prev) => ({
+        ...prev,
+        target: "account_balance",
+      }));
+    }
+  }, [isBakiEnabled, note.target]);
+
+  /**
+   * Looks up the current signed balance for the selected user × category × target.
+   * @returns Current balance or null when the row is missing
+   */
+  const getCurrentBalance = (): number | null => {
+    const selectedUserId = note.user_id;
+    if (!selectedUserId || !note.category_id) {
+      return null;
+    }
+    if (note.target === "baki") {
+      const row = bakis.find(
+        (b) =>
+          b.user_id === selectedUserId && b.category_id === note.category_id
+      );
+      return row ? row.balance : null;
+    }
+    const row = accountBalances.find(
+      (ab) =>
+        ab.user_id === selectedUserId && ab.category_id === note.category_id
+    );
+    return row ? row.balance : null;
+  };
+
+  const currentBalance = getCurrentBalance();
+  const balancePreview =
+    currentBalance !== null && note.amount !== 0 && !isNaN(note.amount)
+      ? previewBalanceChange(
+          currentBalance,
+          noteAmountToBalanceDelta(note.amount)
+        )
+      : null;
+
   const handleCreateNote = async () => {
     setLoading(true);
+
+    if (note.target === "baki" && !isBakiEnabled) {
+      showAlert("Baki is currently disabled", "error");
+      setLoading(false);
+      return;
+    }
 
     // Upload file to supabase storage
     if (file) {
@@ -72,18 +142,26 @@ const CreateNoteForm: React.FC<CreateNoteFormProps> = ({ currentUser, onNoteCrea
       note.media_url = data?.path || "";
     }
 
+    const submittedUserId = note.user_id;
+
     addNote({
       ...note,
       media_url: note.media_url,
     });
 
+    // Keep admin-selected user after submit; customers stay on self.
+    const nextUserId = currentUser
+      ? user?.id || ""
+      : submittedUserId || users[0]?.id || "";
+
     setNote({
       amount: 0,
       category_id: 1,
+      remarks: "",
       media_url: "",
       method: "CA",
       status: "PENDING",
-      user_id: user?.id || "",
+      user_id: nextUserId,
       target: "account_balance",
     });
     setFile(null);
@@ -98,7 +176,9 @@ const CreateNoteForm: React.FC<CreateNoteFormProps> = ({ currentUser, onNoteCrea
   };
 
   return (
-    <div className="mb-4 rounded-lg bg-white p-4 shadow dark:bg-gray-800 sm:p-6 xl:p-8">
+    <div
+      data-tour="create-note-form"
+      className="mb-4 rounded-lg bg-white p-4 shadow dark:bg-gray-800 sm:p-6 xl:p-8">
       {currentUser && (
         <h3 className="mb-4 text-xl font-bold dark:text-white">
           Create a new note
@@ -142,6 +222,14 @@ const CreateNoteForm: React.FC<CreateNoteFormProps> = ({ currentUser, onNoteCrea
               }
             />
           </div>
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            {NOTE_ENTRY_TIP}
+          </p>
+          {balancePreview && (
+            <p className="mt-1 text-sm font-medium text-gray-800 dark:text-gray-200">
+              After approval, balance will go from {balancePreview}
+            </p>
+          )}
         </div>
 
         {/* Remarks */}
@@ -208,7 +296,7 @@ const CreateNoteForm: React.FC<CreateNoteFormProps> = ({ currentUser, onNoteCrea
                 })
               }>
               <option value="account_balance">Account Balance</option>
-              <option value="baki">Baki</option>
+              {isBakiEnabled && <option value="baki">Baki</option>}
             </Select>
           </div>
         </div>
@@ -266,6 +354,7 @@ const CreateNoteForm: React.FC<CreateNoteFormProps> = ({ currentUser, onNoteCrea
           color="primary"
           onClick={handleCreateNote}
           disabled={loading}
+          data-tour="create-note-submit"
           className={`w-full mt-4 ${currentUser ? "" : "col-span-2"}`}>
           Create Note
         </Button>

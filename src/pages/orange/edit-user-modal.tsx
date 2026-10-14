@@ -3,9 +3,11 @@ import { Button, Label, Modal, TextInput } from "flowbite-react";
 import React, { useState, useCallback } from "react";
 import { HiOutlinePencilAlt } from "react-icons/hi";
 import { useAlertContext } from "../../context/AlertContext";
+import { useAppSettingsContext } from "../../context/AppSettingsContext";
 import { User } from "../../context/UserContext";
 import { useCategoryContext } from "../../context/CategoryContext";
 import { useTransactionContext } from "../../context/TransactionContext";
+import { signedDeltaToTransactionType } from "../../utils/balanceLanguage";
 import { supabase } from "../../utils/supabaseClient";
 
 // Defining props type
@@ -23,6 +25,7 @@ const UpdateUserBalanceModal: React.FC<UpdateUserBalanceModalProps> = ({
   const [isUpdating, setIsUpdating] = useState(false);
   const { categories } = useCategoryContext();
   const { addTransaction } = useTransactionContext();
+  const { isBakiEnabled } = useAppSettingsContext();
 
   const handleUpdateBalance = useCallback(async () => {
     try {
@@ -34,35 +37,37 @@ const UpdateUserBalanceModal: React.FC<UpdateUserBalanceModalProps> = ({
       const initialBaki = initialUserDatas.baki;
       const initialAccountBalance = initialUserDatas.account_balance;
 
-      // Process bakis
-      for (const baki of newBaki) {
-        const initialBakiBalance = initialBaki.find((el) => el.id === baki.id)?.balance || 0;
-        if (baki.balance !== initialBakiBalance) {
-          // For PAYOUT: If initial balance is negative (boss owes), we need to add positive amount
-          // If initial balance is positive (user owes), we need to subtract
-          const difference = baki.balance - initialBakiBalance;
-          
-          // Fetch fresh baki data before creating transaction
-          const { data: freshBaki, error: bakiError } = await supabase
-            .from("bakis")
-            .select("*")
-            .eq("id", baki.id)
-            .single();
+      // Process bakis only when the feature is enabled
+      if (isBakiEnabled) {
+        for (const baki of newBaki) {
+          const initialBakiBalance = initialBaki.find((el) => el.id === baki.id)?.balance || 0;
+          if (baki.balance !== initialBakiBalance) {
+            // Signed delta: increase → debit (balance up); decrease → credit (balance down)
+            const difference = baki.balance - initialBakiBalance;
+            const { type, amount } = signedDeltaToTransactionType(difference);
 
-          if (bakiError) {
-            throw new Error(`Failed to fetch fresh baki data: ${bakiError.message}`);
-          }
+            // Fetch fresh baki data before creating transaction
+            const { data: freshBaki, error: bakiError } = await supabase
+              .from("bakis")
+              .select("*")
+              .eq("id", baki.id)
+              .single();
 
-          if (freshBaki) {
-            await addTransaction({
-              user_id: user.id,
-              category_id: baki.category_id,
-              amount: Math.abs(difference),
-              target: "baki",
-              source: "PAYOUT",
-              type: "debit",
-              baki_id: baki.id,
-            });
+            if (bakiError) {
+              throw new Error(`Failed to fetch fresh baki data: ${bakiError.message}`);
+            }
+
+            if (freshBaki) {
+              await addTransaction({
+                user_id: user.id,
+                category_id: baki.category_id,
+                amount,
+                target: "baki",
+                source: "PAYOUT",
+                type,
+                baki_id: baki.id,
+              });
+            }
           }
         }
       }
@@ -72,10 +77,12 @@ const UpdateUserBalanceModal: React.FC<UpdateUserBalanceModalProps> = ({
         const initialAccountBalanceBalance = initialAccountBalance.find(
           (el) => el.id === accountBalance.id
         )?.balance || 0;
-        
+
         if (accountBalance.balance !== initialAccountBalanceBalance) {
+          // Signed delta: increase → debit (balance up); decrease → credit (balance down)
           const difference = accountBalance.balance - initialAccountBalanceBalance;
-          
+          const { type, amount } = signedDeltaToTransactionType(difference);
+
           // Fetch fresh account balance data before creating transaction
           const { data: freshBalance, error: balanceError } = await supabase
             .from("account_balances")
@@ -91,10 +98,10 @@ const UpdateUserBalanceModal: React.FC<UpdateUserBalanceModalProps> = ({
             await addTransaction({
               user_id: user.id,
               category_id: accountBalance.category_id,
-              amount: Math.abs(difference),
+              amount,
               target: "account_balance",
               source: "PAYOUT",
-              type: "debit",
+              type,
               account_balance_id: accountBalance.id,
             });
           }
@@ -109,13 +116,15 @@ const UpdateUserBalanceModal: React.FC<UpdateUserBalanceModalProps> = ({
     } finally {
       setIsUpdating(false);
     }
-  }, [user.id, userData, initialUserData, addTransaction, showAlert]);
+  }, [user.id, userData, initialUserData, addTransaction, showAlert, isBakiEnabled]);
 
   const handleClearAll = useCallback(() => {
     const newUserData = { ...userData };
-    newUserData.baki = newUserData.baki.map((baki) =>
-      baki.balance < 0 ? { ...baki, balance: 0 } : baki
-    );
+    if (isBakiEnabled) {
+      newUserData.baki = newUserData.baki.map((baki) =>
+        baki.balance < 0 ? { ...baki, balance: 0 } : baki
+      );
+    }
     newUserData.account_balance = newUserData.account_balance.map(
       (account_balance) =>
         account_balance.balance < 0
@@ -124,7 +133,7 @@ const UpdateUserBalanceModal: React.FC<UpdateUserBalanceModalProps> = ({
     );
 
     setUserData(newUserData);
-  }, [userData]);
+  }, [userData, isBakiEnabled]);
 
   const handleBalanceChange = useCallback((type: "baki" | "account_balance", id: string, newBalance: number) => {
     if (!isNaN(newBalance)) {
@@ -152,36 +161,38 @@ const UpdateUserBalanceModal: React.FC<UpdateUserBalanceModalProps> = ({
           <strong>Update user balances</strong>
         </Modal.Header>
         <Modal.Body>
-          <div className="grid grid-cols-2 gap-6 sm:grid-cols-2">
-            <div className="col-span-1">
-              {/* Baki */}
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                Baki
-              </h2>
-              {userData.baki.map((baki) => (
-                <div key={baki.id} className="flex items-center gap-x-3 mb-2">
-                  <Label
-                    htmlFor={baki.id.toString()}
-                    className="text-sm font-medium text-gray-700 dark:text-gray-200">
-                    {
-                      categories.find(
-                        (category) => category.id === baki.category_id
-                      )?.name
-                    }
-                  </Label>
-                  <div className="flex-1">
-                    <TextInput
-                      id={baki.id.toString()}
-                      name={baki.id.toString()}
-                      type="number"
-                      placeholder="Baki"
-                      value={baki.balance}
-                      onChange={(e) => handleBalanceChange("baki", baki.id, parseInt(e.target.value, 10))}
-                    />
+          <div className={`grid gap-6 ${isBakiEnabled ? "grid-cols-2 sm:grid-cols-2" : "grid-cols-1"}`}>
+            {isBakiEnabled && (
+              <div className="col-span-1">
+                {/* Baki */}
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                  Baki
+                </h2>
+                {userData.baki.map((baki) => (
+                  <div key={baki.id} className="flex items-center gap-x-3 mb-2">
+                    <Label
+                      htmlFor={baki.id.toString()}
+                      className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                      {
+                        categories.find(
+                          (category) => category.id === baki.category_id
+                        )?.name
+                      }
+                    </Label>
+                    <div className="flex-1">
+                      <TextInput
+                        id={baki.id.toString()}
+                        name={baki.id.toString()}
+                        type="number"
+                        placeholder="Baki"
+                        value={baki.balance}
+                        onChange={(e) => handleBalanceChange("baki", baki.id, parseInt(e.target.value, 10))}
+                      />
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
             <div className="col-span-1">
               {/* Account Balance */}
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
@@ -232,6 +243,9 @@ const UpdateUserBalanceModal: React.FC<UpdateUserBalanceModalProps> = ({
           >
             Clear all
           </Button>
+          <p className="w-full text-sm text-gray-500 dark:text-gray-400">
+            Clear all sets below-zero balances to zero (does not change above-zero balances).
+          </p>
         </Modal.Footer>
       </Modal>
     </>

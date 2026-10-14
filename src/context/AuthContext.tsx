@@ -1,29 +1,69 @@
 import type { PropsWithChildren } from "react";
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
+import type { User } from "@supabase/supabase-js";
 import { supabase } from "../utils/supabaseClient";
 import { Database } from "../../database.types";
 
 type UserDetail = Database["public"]["Tables"]["user_details"]["Row"];
 
 interface AuthContextProps {
-  user: any;
+  user: User | null;
   user_detail: UserDetail | null;
-  signIn: (email: string, password: string) => Promise<any>;
-  signOut: () => Promise<any>;
+  signIn: (
+    email: string,
+    password: string
+  ) => Promise<{ user?: User; error?: unknown }>;
+  signOut: () => Promise<{ error?: unknown } | undefined>;
   loading: boolean;
+  /**
+   * Marks onboarding complete for the current user and refreshes user_detail.
+   * @returns True when the update succeeded
+   */
+  markOnboardingComplete: () => Promise<boolean>;
+  /**
+   * Reloads user_details for the signed-in user.
+   */
+  refreshUserDetail: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextProps>(undefined!);
+const AuthContext = createContext<AuthContextProps | null>(null);
 
 export function AuthProvider({ children }: PropsWithChildren) {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [user_detail, setUserDetail] = useState<UserDetail | null>(null);
+
+  /**
+   * Loads user_details for a given auth user id.
+   * @param userId - Auth user UUID
+   */
+  const loadUserDetail = useCallback(async (userId: string) => {
+    const { data, error } = await supabase
+      .from("user_details")
+      .select("*")
+      .eq("user_id", userId)
+      .single();
+
+    if (error) {
+      console.error("Error fetching user details:", error);
+      setUserDetail(null);
+      return;
+    }
+
+    setUserDetail(data);
+  }, []);
+
+  const refreshUserDetail = useCallback(async () => {
+    if (!user?.id) {
+      return;
+    }
+    await loadUserDetail(user.id);
+  }, [user?.id, loadUserDetail]);
 
   useEffect(() => {
     const fetchUser = async () => {
       const {
-        data: { user },
+        data: { user: authUser },
         error,
       } = await supabase.auth.getUser();
 
@@ -31,56 +71,51 @@ export function AuthProvider({ children }: PropsWithChildren) {
         console.error("Error getting user:", error);
       }
 
-      // Fetch user_details if user is not null
-      if (user) {
-        const { data: user_detail, error } = await supabase
-          .from("user_details")
-          .select("*")
-          .eq("user_id", user.id)
-          .single();
-
-        if (error) {
-          console.error("Error fetching user details:", error);
-          setUserDetail(null);
-          return;
-        }
-
-        setUserDetail(user_detail);
+      if (authUser) {
+        await loadUserDetail(authUser.id);
       }
 
-      setUser(user);
-      setLoading(false); // Update loading state after user is set
+      setUser(authUser);
+      setLoading(false);
     };
 
     fetchUser();
 
     const { data: listener } = supabase.auth.onAuthStateChange(
       (_event, session) => {
-        setUser(session?.user || null);
-        setLoading(false); // Ensure to set loading to false here as well
+        const nextUser = session?.user || null;
+        setUser(nextUser);
+        if (nextUser) {
+          // Keep loading true until role/details exist — RoleProtectedRoute needs them.
+          void loadUserDetail(nextUser.id).finally(() => {
+            setLoading(false);
+          });
+        } else {
+          setUserDetail(null);
+          setLoading(false);
+        }
       }
     );
 
     return () => {
       listener?.subscription.unsubscribe();
     };
-  }, []);
+  }, [loadUserDetail]);
 
   const signIn = async (email: string, password: string) => {
-    setLoading(true); // Consider setting loading to true to indicate starting the sign-in process
+    setLoading(true);
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
     if (error) {
       console.error("Error during sign in:", error);
-      setLoading(false); // Ensure to set loading to false in case of an error
+      setLoading(false);
       return { error };
     }
     setUser(data.user);
 
-    // Fetch user_details
-    const { data: user_detail, error: userDetailError } = await supabase
+    const { data: detail, error: userDetailError } = await supabase
       .from("user_details")
       .select("*")
       .eq("user_id", data.user.id)
@@ -92,7 +127,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       return { error: userDetailError };
     }
 
-    setUserDetail(user_detail);
+    setUserDetail(detail);
     setLoading(false);
     return { user: data.user };
   };
@@ -100,6 +135,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const signOut = async () => {
     setLoading(true);
     setUser(null);
+    setUserDetail(null);
 
     const { error } = await supabase.auth.signOut();
     if (error) {
@@ -111,9 +147,42 @@ export function AuthProvider({ children }: PropsWithChildren) {
     setLoading(false);
   };
 
+  /**
+   * Persists onboarding_completed_at on user_details.
+   */
+  const markOnboardingComplete = useCallback(async (): Promise<boolean> => {
+    if (!user?.id) {
+      return false;
+    }
+
+    const completedAt = new Date().toISOString();
+    const { data, error } = await supabase
+      .from("user_details")
+      .update({ onboarding_completed_at: completedAt })
+      .eq("user_id", user.id)
+      .select("*")
+      .single();
+
+    if (error || !data) {
+      console.error("Error marking onboarding complete:", error);
+      return false;
+    }
+
+    setUserDetail(data);
+    return true;
+  }, [user?.id]);
+
   return (
     <AuthContext.Provider
-      value={{ user, user_detail, signIn, signOut, loading }}>
+      value={{
+        user,
+        user_detail,
+        signIn,
+        signOut,
+        loading,
+        markOnboardingComplete,
+        refreshUserDetail,
+      }}>
       {children}
     </AuthContext.Provider>
   );
@@ -122,7 +191,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 export function useAuthContext() {
   const context = useContext(AuthContext);
 
-  if (typeof context === "undefined") {
+  if (!context) {
     throw new Error(
       "useAuthContext should be used within the AuthProvider provider!"
     );

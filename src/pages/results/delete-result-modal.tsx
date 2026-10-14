@@ -9,42 +9,64 @@ import {
 import { useAlertContext } from "../../context/AlertContext";
 import { Result, useResultContext } from "../../context/ResultContext";
 
-// Defining props type
 interface DeleteResultModalProps {
   result: Result;
 }
 
+/**
+ * Delete result with balance-impact warning (transactions reverse on delete).
+ */
 const DeleteResultModal: React.FC<DeleteResultModalProps> = ({ result }) => {
   const [isOpen, setOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const { deleteResult } = useResultContext();
   const { showAlert } = useAlertContext();
 
   const handleDeleteResult = async () => {
-    await deleteResult(result)
-    setOpen(false);
-    showAlert("Result updated successfully", "success");
-  }
+    if (isDeleting) {
+      return;
+    }
+    setIsDeleting(true);
+    try {
+      await deleteResult(result);
+      setOpen(false);
+      showAlert("Result deleted successfully", "success");
+    } catch (error) {
+      console.error("Failed to delete result:", error);
+      showAlert("Failed to delete result", "error");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   return (
     <>
-      <Button color="failure" onClick={() => setOpen(true)} className=''>
+      <Button color="failure" onClick={() => setOpen(true)} className="">
         <div className="flex items-center gap-x-2">
           <HiTrash className="text-sm" />
           Delete Result
         </div>
       </Button>
       <Modal onClose={() => setOpen(false)} show={isOpen}>
+        <Modal.Header>Confirm delete result</Modal.Header>
         <Modal.Body>
-          {/* Confirm Delete Modal */}
-          <div className="p-5">
-            <div className="text-xl font-bold text-center">Delete Result</div>
-            <div className="text-center mt-2">Are you sure you want to delete this result?</div>
-            <div className="flex justify-center gap-x-5 mt-5">
-              <Button color="failure" onClick={handleDeleteResult}>Yes</Button>
-              <Button onClick={() => setOpen(false)}>No</Button>
-            </div>
-          </div>
+          <p className="text-sm text-gray-700 dark:text-gray-300">
+            Deleting this result removes its ledger rows and reverses their
+            balance effects (balances may go up or down depending on the original
+            lines). This cannot be undone from here.
+          </p>
         </Modal.Body>
+        <Modal.Footer>
+          <Button
+            color="failure"
+            disabled={isDeleting}
+            onClick={handleDeleteResult}>
+            {isDeleting ? "Deleting..." : "Yes, delete"}
+          </Button>
+          <Button color="gray" onClick={() => setOpen(false)}>
+            Cancel
+          </Button>
+        </Modal.Footer>
       </Modal>
     </>
   );

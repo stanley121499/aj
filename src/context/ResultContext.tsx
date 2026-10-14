@@ -10,6 +10,7 @@ import React, {
 import { supabase } from "../utils/supabaseClient";
 import { Database } from "../../database.types";
 import { useAlertContext } from "./AlertContext";
+import { useAppSettingsContext } from "./AppSettingsContext";
 import { useTransactionContext, Transaction } from "./TransactionContext";
 import { useUserContext } from "./UserContext";
 import { useBakiContext } from "./BakiContext";
@@ -40,6 +41,7 @@ export function ResultProvider({ children }: PropsWithChildren) {
   const { users } = useUserContext();
   const { getOrCreateBaki } = useBakiContext();
   const { getOrCreateAccountBalance } = useAccountBalanceContext();
+  const { isBakiEnabled } = useAppSettingsContext();
 
   useEffect(() => {
     const fetchResults = async () => {
@@ -174,6 +176,10 @@ export function ResultProvider({ children }: PropsWithChildren) {
 
         await addTransaction(transaction);
       } else if (result.target === "baki") {
+        if (!isBakiEnabled) {
+          throw new Error("Baki is currently disabled");
+        }
+
         console.log("Processing baki for user:", user.id);
         let baki = freshBakis?.find(
           b => b.user_id === user.id && b.category_id === result.category_id
@@ -213,13 +219,17 @@ export function ResultProvider({ children }: PropsWithChildren) {
     }
 
     return skippedUsers;
-  }, [addTransaction, getOrCreateAccountBalance, getOrCreateBaki, users]);
+  }, [addTransaction, getOrCreateAccountBalance, getOrCreateBaki, users, isBakiEnabled]);
 
   const addResult = useCallback(async (result: ResultInsert) => {
     setLoading(true);
     let createdResult: Result | null = null;
 
     try {
+      if (result.target === "baki" && !isBakiEnabled) {
+        throw new Error("Baki is currently disabled");
+      }
+
       const { data, error } = await supabase
         .from("results")
         .insert(result)
@@ -254,7 +264,7 @@ export function ResultProvider({ children }: PropsWithChildren) {
     } finally {
       setLoading(false);
     }
-  }, [processResult, showAlert, trackOperation]);
+  }, [processResult, showAlert, trackOperation, isBakiEnabled]);
 
   const deleteResult = useCallback(async (result: Result) => {
     setLoading(true);
@@ -295,6 +305,10 @@ export function ResultProvider({ children }: PropsWithChildren) {
     let originalTransactions: Transaction[] = [];
 
     try {
+      if (result.target === "baki" && !isBakiEnabled) {
+        throw new Error("Baki is currently disabled");
+      }
+
       originalTransactions = transactions.filter(
         (transaction) => transaction.result_id === result.id
       );
@@ -341,7 +355,7 @@ export function ResultProvider({ children }: PropsWithChildren) {
     } finally {
       setLoading(false);
     }
-  }, [transactions, processResult, showAlert, deleteTransaction, addTransaction, trackOperation]);
+  }, [transactions, processResult, showAlert, deleteTransaction, addTransaction, trackOperation, isBakiEnabled]);
 
   const value = useMemo(() => ({
     results,

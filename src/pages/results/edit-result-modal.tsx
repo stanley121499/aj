@@ -3,47 +3,49 @@ import {
   Button,
   Label,
   Modal,
-  Select, Textarea
+  Select,
+  Textarea,
 } from "flowbite-react";
 import React, { useState } from "react";
 import {
   HiOutlinePencilAlt
 } from "react-icons/hi";
-import { useAlertContext } from "../../context/AlertContext";
 import { useCategoryContext } from "../../context/CategoryContext";
 import { Result, useResultContext } from "../../context/ResultContext";
 
-// Defining props type
 interface EditResultModalProps {
   result: Result;
 }
 
+/**
+ * Edit result with an explicit confirm step warning about balance impact.
+ */
 const EditResultModal: React.FC<EditResultModalProps> = ({ result }) => {
   const [isOpen, setOpen] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { updateResult } = useResultContext();
-  const { showAlert } = useAlertContext();
   const { categories } = useCategoryContext();
   const [resultData, setResultData] = useState<Result>(result);
 
   const handleUpdateResult = async () => {
-    if (isSubmitting) return; // Prevent multiple submissions
-    
+    if (isSubmitting) return;
+
     setIsSubmitting(true);
     try {
       await updateResult(resultData);
-      setOpen(false); // Only close modal on success
+      setShowConfirm(false);
+      setOpen(false);
     } catch (error) {
-      // Error handling is already done in updateResult context
       console.error("Failed to update result:", error);
     } finally {
       setIsSubmitting(false);
     }
-  }
+  };
 
   return (
     <>
-      <Button color="primary" onClick={() => setOpen(true)} className=''>
+      <Button color="primary" onClick={() => setOpen(true)} className="">
         <div className="flex items-center gap-x-2">
           <HiOutlinePencilAlt className="text-xs" />
           Edit Result
@@ -62,8 +64,12 @@ const EditResultModal: React.FC<EditResultModalProps> = ({ result }) => {
                   id="category"
                   name="category"
                   value={resultData.category_id}
-                  onChange={(e) => setResultData({ ...resultData, category_id: parseInt(e.target.value) })}
-                >
+                  onChange={(e) =>
+                    setResultData({
+                      ...resultData,
+                      category_id: parseInt(e.target.value),
+                    })
+                  }>
                   {categories.map((category) => (
                     <option key={category.id} value={category.id}>
                       {category.name}
@@ -79,21 +85,44 @@ const EditResultModal: React.FC<EditResultModalProps> = ({ result }) => {
                 <Textarea
                   id="result"
                   name="result"
-                  placeholder="The result of the test"
+                  placeholder="amount username"
                   value={resultData.result}
-                  onChange={(e) => setResultData({ ...resultData, result: e.target.value })}
+                  onChange={(e) =>
+                    setResultData({ ...resultData, result: e.target.value })
+                  }
                 />
               </div>
             </div>
           </div>
         </Modal.Body>
         <Modal.Footer>
-          <Button 
-            color="primary" 
-            onClick={() => handleUpdateResult()}
+          <Button
+            color="primary"
+            onClick={() => setShowConfirm(true)}
+            disabled={isSubmitting}>
+            Save all
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      <Modal show={showConfirm} onClose={() => setShowConfirm(false)} size="md">
+        <Modal.Header>Confirm edit result</Modal.Header>
+        <Modal.Body>
+          <p className="text-sm text-gray-700 dark:text-gray-300">
+            Saving will recalculate related transactions. Balances for the listed
+            users may go up or down based on each line amount (positive → balance
+            up; negative → balance down).
+          </p>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button
+            color="primary"
             disabled={isSubmitting}
-          >
-            {isSubmitting ? "Saving..." : "Save all"}
+            onClick={handleUpdateResult}>
+            {isSubmitting ? "Saving..." : "Confirm save"}
+          </Button>
+          <Button color="gray" onClick={() => setShowConfirm(false)}>
+            Cancel
           </Button>
         </Modal.Footer>
       </Modal>

@@ -15,6 +15,7 @@ import {
   HiX,
   HiMenuAlt1
 } from "react-icons/hi";
+
 const ExampleNavbar: React.FC = function () {
   const { isOpenOnSmallScreens, setOpenOnSmallScreens, isPageWithSidebar } =
     useSidebarContext();
@@ -48,13 +49,12 @@ const ExampleNavbar: React.FC = function () {
               </span>
             </Navbar.Brand>
           </div>
-          <div className="flex items-center lg:gap-3">
+          <div className="flex items-center gap-2 lg:gap-3">
             <div className="flex items-center">
               <DarkThemeToggle />
             </div>
-            <div className="hidden lg:block">
-              <UserDropdown />
-            </div>
+            {/* Account menu available on small screens too (was lg-only). */}
+            <UserDropdown />
           </div>
         </div>
       </div>
@@ -63,9 +63,10 @@ const ExampleNavbar: React.FC = function () {
 };
 
 const UserDropdown: FC = function () {
-  const { signOut, user } = useAuthContext();
+  const { signOut, user, user_detail } = useAuthContext();
   const navigate = useNavigate();
-  const username = user.email.split("@")[0];
+  const username = user?.email?.split("@")[0] ?? "Account";
+  const isAdmin = user_detail?.role === "admin";
 
   return (
     <Dropdown
@@ -88,16 +89,19 @@ const UserDropdown: FC = function () {
           {username}
         </span>
       </Dropdown.Header>
-      <Dropdown.Item
-        onClick={() => navigate("/dashboard")}
-      >Dashboard</Dropdown.Item>
-      <Dropdown.Item
-        onClick={() => navigate("/users/settings")}
-      >Settings</Dropdown.Item>
+      <Dropdown.Item onClick={() => navigate("/dashboard")}>
+        Dashboard
+      </Dropdown.Item>
+      <Dropdown.Item onClick={() => navigate("/onboarding")}>
+        Help
+      </Dropdown.Item>
+      {isAdmin && (
+        <Dropdown.Item onClick={() => navigate("/users/settings")}>
+          Settings
+        </Dropdown.Item>
+      )}
       <Dropdown.Divider />
-      <Dropdown.Item
-        onClick={() => signOut()}
-      >Sign out</Dropdown.Item>
+      <Dropdown.Item onClick={() => signOut()}>Sign out</Dropdown.Item>
     </Dropdown>
   );
 };
