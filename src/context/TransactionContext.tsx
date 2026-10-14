@@ -13,7 +13,6 @@ import { useAccountBalanceContext } from "./AccountBalanceContext";
 import { useAppSettingsContext } from "./AppSettingsContext";
 import { useBakiContext } from "./BakiContext";
 import { Transaction, TransactionInsert } from "../types/transaction";
-import { validateTransaction } from "../utils/transactionUtils";
 import { useRealtimeSubscription } from "../utils/useRealtimeSubscription";
 
 interface TransactionContextProps {

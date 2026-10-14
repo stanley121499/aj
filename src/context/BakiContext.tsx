@@ -106,8 +106,7 @@ export function BakiProvider({ children }: PropsWithChildren) {
 
   const trackOperation = useRealtimeSubscription<Baki>(
     { table: "bakis" },
-    handleRealtimeChanges,
-    [isBakiEnabled]
+    handleRealtimeChanges
   );
 
   const addBaki = useCallback(async (baki: BakiInsert) => {

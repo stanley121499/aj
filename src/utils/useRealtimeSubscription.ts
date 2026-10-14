@@ -51,21 +51,19 @@ type TrackOperation<T extends TrackableEntity> = (operation: PendingOperation<T>
  * Custom hook for handling real-time subscriptions to Supabase tables
  * @param config - Configuration for the subscription
  * @param handler - Function to handle real-time changes
- * @param dependencies - Array of dependencies for the effect
  * @returns Function to track pending operations
  */
 export function useRealtimeSubscription<T extends TrackableEntity>(
   config: SubscriptionConfig,
-  handler: RealtimeHandler<T>,
-  dependencies: unknown[] = []
+  handler: RealtimeHandler<T>
 ): TrackOperation<T> {
   const pendingOperations = useRef<Map<string | number, PendingOperation<T>>>(new Map());
   const operationTimeout = 5000; // 5 seconds timeout for pending operations
+  const table = config.table;
+  const schema = config.schema || "public";
+  const channelName = config.channel || config.table;
 
   useEffect(() => {
-    const channelName = config.channel || config.table;
-    const schema = config.schema || "public";
-
     const handlePayload = (payload: RealtimePostgresChangesPayload<T>) => {
       // For DELETE events, we need to use the old record's ID
       const recordId = payload.eventType === "DELETE" 
@@ -113,7 +111,7 @@ export function useRealtimeSubscription<T extends TrackableEntity>(
       .channel(channelName)
       .on(
         "postgres_changes",
-        { event: "*", schema, table: config.table },
+        { event: "*", schema, table },
         handlePayload
       )
       .subscribe();
@@ -121,7 +119,7 @@ export function useRealtimeSubscription<T extends TrackableEntity>(
     return () => {
       subscription.unsubscribe();
     };
-  }, [config.table, config.schema, config.channel, handler, ...dependencies]);
+  }, [table, schema, channelName, handler]);
 
   // Return a function to track pending operations
   return (operation: PendingOperation<T>) => {

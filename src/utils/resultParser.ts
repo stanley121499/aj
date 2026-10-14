@@ -1,5 +1,3 @@
-import { User } from "../context/UserContext";
-
 /**
  * Represents a parsed result line with validated data
  */

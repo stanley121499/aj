@@ -1,5 +1,5 @@
 /* eslint-disable jsx-a11y/anchor-is-valid */
-import { Breadcrumb, Button, Label, Table, TextInput } from "flowbite-react";
+import { Breadcrumb, Label, Table, TextInput } from "flowbite-react";
 import type { FC } from "react";
 import React from "react";
 import { HiHome } from "react-icons/hi";
@@ -14,7 +14,7 @@ import DeleteResultModal from "./delete-result-modal";
 import { humanizeTarget } from "../../utils/balanceLanguage";
 
 const ResultListPage: FC = function () {
-  const { results, loading, updateResult } = useResultContext();
+  const { results, loading } = useResultContext();
   const { users } = useUserContext();
   const [searchValue, setSearchValue] = React.useState("");
 
@@ -30,12 +30,6 @@ const ResultListPage: FC = function () {
       users.find((user) => user.id === result.user_id)?.email ?? "";
     return email.includes(searchValue);
   });
-
-  const updateAllResults = async () => {
-    results.forEach(async (result) => {
-      await updateResult(result);
-    });
-  };
 
   return (
     <NavbarSidebarLayout>
@@ -76,9 +70,6 @@ const ResultListPage: FC = function () {
             </div>
 
             <div className="ml-auto flex items-center space-x-2 sm:space-x-3">
-              {/* <Button color="primary" onClick={updateAllResults}>
-                Update All Results
-              </Button> */}
               <AddResultModal />
             </div>
           </div>
