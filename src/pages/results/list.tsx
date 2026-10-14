@@ -22,6 +22,15 @@ const ResultListPage: FC = function () {
     return <LoadingPage />;
   }
 
+  const filteredResults = results.filter((result) => {
+    if (!searchValue) {
+      return true;
+    }
+    const email =
+      users.find((user) => user.id === result.user_id)?.email ?? "";
+    return email.includes(searchValue);
+  });
+
   const updateAllResults = async () => {
     results.forEach(async (result) => {
       await updateResult(result);
@@ -79,16 +88,21 @@ const ResultListPage: FC = function () {
         <div className="overflow-x-auto">
           <div className="inline-block min-w-full align-middle">
             <div className="overflow-hidden shadow">
-              {results.length > 0 ? (
-                <ResultsTable
-                  results={results.filter((result) =>
-                    users
-                      .find((user) => user.id === result.user_id)
-                      ?.email.includes(searchValue)
-                  )}
-                />
+              {filteredResults.length > 0 ? (
+                <ResultsTable results={filteredResults} />
               ) : (
-                <div className="p-4 text-center">No results found</div>
+                <div className="p-8 text-center text-gray-600 dark:text-gray-300">
+                  <p className="mb-2 text-lg font-medium">
+                    {results.length === 0
+                      ? "No results yet"
+                      : "No matching results"}
+                  </p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    {results.length === 0
+                      ? "Add a result to get started."
+                      : "Try a different search."}
+                  </p>
+                </div>
               )}
             </div>
           </div>

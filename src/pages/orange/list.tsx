@@ -96,7 +96,12 @@ const OrangeListPage: FC = function () {
               {filteredUsers.length > 0 ? (
                 <UsersTable users={filteredUsers} isBakiEnabled={isBakiEnabled} />
               ) : (
-                <div className="p-4 text-center">No users found</div>
+                <div className="p-8 text-center text-gray-600 dark:text-gray-300">
+                  <p className="mb-2 text-lg font-medium">No users found</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    No users currently have below-zero balances.
+                  </p>
+                </div>
               )}
             </div>
           </div>

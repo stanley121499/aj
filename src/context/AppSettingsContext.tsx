@@ -61,25 +61,44 @@ export function AppSettingsProvider({ children }: Readonly<PropsWithChildren>) {
   const { user_detail } = useAuthContext();
 
   useEffect(() => {
+    let cancelled = false;
+
     const fetchSettings = async () => {
-      const { data, error } = await supabase
-        .from("app_settings")
-        .select("*")
-        .eq("key", BAKI_ENABLED_SETTING_KEY)
-        .maybeSingle();
+      try {
+        const { data, error } = await supabase
+          .from("app_settings")
+          .select("*")
+          .eq("key", BAKI_ENABLED_SETTING_KEY)
+          .maybeSingle();
 
-      if (error) {
+        if (cancelled) {
+          return;
+        }
+
+        if (error) {
+          console.error("Error fetching app settings:", error);
+          // Fail closed: keep Baki off if the setting cannot be loaded.
+          setIsBakiEnabled(false);
+        } else {
+          setIsBakiEnabled(data?.value_boolean ?? false);
+        }
+      } catch (error) {
         console.error("Error fetching app settings:", error);
-        // Fail closed: keep Baki off if the setting cannot be loaded.
-        setIsBakiEnabled(false);
-      } else {
-        setIsBakiEnabled(data?.value_boolean ?? false);
+        if (!cancelled) {
+          setIsBakiEnabled(false);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
-
-      setLoading(false);
     };
 
-    fetchSettings();
+    void fetchSettings();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {

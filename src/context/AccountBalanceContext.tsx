@@ -30,23 +30,49 @@ export function AccountBalanceProvider({ children }: Readonly<PropsWithChildren>
   const [currentUserAccountBalance, setCurrentUserAccountBalance] = useState<AccountBalance[]>([]);
 
   useEffect(() => {
+    let cancelled = false;
+
     const fetchAccountBalances = async () => {
-      const { data: balances, error } = await supabase
-        .from('account_balances')
-        .select('*');
+      setLoading(true);
+      try {
+        const { data: balances, error } = await supabase
+          .from("account_balances")
+          .select("*");
 
-      if (error) {
-        console.error('Error fetching account balances:', error);
-        showAlert('Error fetching account balances', 'error');
+        if (error) {
+          console.error("Error fetching account balances:", error);
+          showAlert("Error fetching account balances", "error");
+        }
+
+        if (!cancelled) {
+          setAccountBalances(balances || []);
+          setCurrentUserAccountBalance(
+            balances?.filter(
+              (accountBalance) => accountBalance.user_id === user?.id
+            ) || []
+          );
+        }
+      } catch (error) {
+        console.error("Error fetching account balances:", error);
+        showAlert("Error fetching account balances", "error");
+        if (!cancelled) {
+          setAccountBalances([]);
+          setCurrentUserAccountBalance([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
-
-      setAccountBalances(balances || []);
-      setCurrentUserAccountBalance(balances?.filter(accountBalance => accountBalance.user_id === user?.id) || []);
-      setLoading(false);
     };
 
-    fetchAccountBalances();
-  }, [showAlert, user?.id]);
+    void fetchAccountBalances();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- showAlert omitted to avoid refetch loops
+  }, [user?.id]);
 
   const handleRealtimeChanges = useCallback((payload: { eventType: string; new: AccountBalance; old: AccountBalance }) => {
     setAccountBalances(prev => {

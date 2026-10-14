@@ -35,23 +35,43 @@ export function TransactionProvider({ children }: Readonly<PropsWithChildren>) {
   const { isBakiEnabled } = useAppSettingsContext();
 
   useEffect(() => {
-    const fetchTransactions = async () => {
-      const { data: fetchedTransactions, error } = await supabase
-        .from("transactions")
-        .select("*")
-        .order("id", { ascending: false });
+    let cancelled = false;
 
-      if (error) {
+    const fetchTransactions = async () => {
+      try {
+        const { data: fetchedTransactions, error } = await supabase
+          .from("transactions")
+          .select("*")
+          .order("id", { ascending: false });
+
+        if (error) {
+          console.error("Error fetching transactions:", error);
+          showAlert("Error fetching transactions", "error");
+        }
+
+        if (!cancelled) {
+          setTransactions(fetchedTransactions || []);
+        }
+      } catch (error) {
         console.error("Error fetching transactions:", error);
         showAlert("Error fetching transactions", "error");
+        if (!cancelled) {
+          setTransactions([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
-
-      setTransactions(fetchedTransactions || []);
-      setLoading(false);
     };
 
-    fetchTransactions();
-  }, [showAlert]);
+    void fetchTransactions();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- avoid refetch loops from unstable showAlert
+  }, []);
 
   const handleRealtimeChanges = useCallback((payload: { eventType: string; new: Transaction; old: Transaction }) => {
     setTransactions(prev => {

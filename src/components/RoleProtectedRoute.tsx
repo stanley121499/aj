@@ -23,9 +23,13 @@ const RoleProtectedRoute: React.FC<RoleProtectedRouteProps> = ({
 }) => {
   const { user_detail, loading } = useAuthContext();
 
-  if (loading || !user_detail) {
-    // Wait for user_detail — redirecting while it is still null sends admins to /dashboard.
+  // Only block on auth/detail fetch — never treat a missing profile as forever-loading.
+  if (loading) {
     return <LoadingPage />;
+  }
+
+  if (!user_detail) {
+    return <Navigate to={redirectTo} replace />;
   }
 
   if (!allowedRoles.includes(user_detail.role)) {

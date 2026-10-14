@@ -45,15 +45,18 @@ const NoteListPage: FC = function () {
   const { users } = useUserContext();
   const [searchValue, setSearchValue] = React.useState("");
 
+  // LoadingPage only while the notes fetch is in flight — empty arrays show empty UI.
   if (loading) {
     return <LoadingPage />;
   }
 
-  const filteredNotes = notes.filter((note) =>
-    users
-      .find((user) => user.id === note.user_id)
-      ?.email.includes(searchValue)
-  );
+  const filteredNotes = notes.filter((note) => {
+    if (!searchValue) {
+      return true;
+    }
+    const email = users.find((user) => user.id === note.user_id)?.email ?? "";
+    return email.includes(searchValue);
+  });
 
   return (
     <NavbarSidebarLayout>
@@ -106,9 +109,13 @@ const NoteListPage: FC = function () {
                 <NotesTable notes={filteredNotes} />
               ) : (
                 <div className="p-8 text-center text-gray-600 dark:text-gray-300">
-                  <p className="mb-2 text-lg font-medium">No notes yet</p>
+                  <p className="mb-2 text-lg font-medium">
+                    {notes.length === 0 ? "No notes yet" : "No matching notes"}
+                  </p>
                   <p className="text-sm text-gray-500 dark:text-gray-400">
-                    Create a note or wait for customers to submit payment proofs.
+                    {notes.length === 0
+                      ? "Create a note or wait for customers to submit payment proofs."
+                      : "Try a different search."}
                   </p>
                 </div>
               )}

@@ -24,23 +24,43 @@ export function CategoryProvider({ children }: PropsWithChildren) {
   const { showAlert } = useAlertContext();
 
   useEffect(() => {
+    let cancelled = false;
+
     const fetchCategories = async () => {
-      const { data: categories, error } = await supabase
-        .from('categories')
-        .select('*')
-        .order('id', { ascending: false });
+      try {
+        const { data: categories, error } = await supabase
+          .from("categories")
+          .select("*")
+          .order("id", { ascending: false });
 
-      if (error) {
-        console.error('Error fetching categories:', error);
-        showAlert('Error fetching categories', 'error');
+        if (error) {
+          console.error("Error fetching categories:", error);
+          showAlert("Error fetching categories", "error");
+        }
+
+        if (!cancelled) {
+          setCategories(categories || []);
+        }
+      } catch (error) {
+        console.error("Error fetching categories:", error);
+        showAlert("Error fetching categories", "error");
+        if (!cancelled) {
+          setCategories([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
-
-      setCategories(categories || []);
-      setLoading(false);
     };
 
-    fetchCategories();
-  }, [showAlert]);
+    void fetchCategories();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- avoid refetch loops from unstable showAlert
+  }, []);
 
   const handleRealtimeChanges = useCallback((payload: { eventType: string; new: Category; old: Category }) => {
     setCategories(prev => {

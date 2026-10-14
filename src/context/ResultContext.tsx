@@ -44,23 +44,43 @@ export function ResultProvider({ children }: PropsWithChildren) {
   const { isBakiEnabled } = useAppSettingsContext();
 
   useEffect(() => {
-    const fetchResults = async () => {
-      const { data: results, error } = await supabase
-        .from("results")
-        .select("*")
-        .order("id", { ascending: false });
+    let cancelled = false;
 
-      if (error) {
+    const fetchResults = async () => {
+      try {
+        const { data: results, error } = await supabase
+          .from("results")
+          .select("*")
+          .order("id", { ascending: false });
+
+        if (error) {
+          console.error("Error fetching results:", error);
+          showAlert("Error fetching results", "error");
+        }
+
+        if (!cancelled) {
+          setResults(results || []);
+        }
+      } catch (error) {
         console.error("Error fetching results:", error);
         showAlert("Error fetching results", "error");
+        if (!cancelled) {
+          setResults([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
-
-      setResults(results || []);
-      setLoading(false);
     };
 
-    fetchResults();
-  }, [showAlert]);
+    void fetchResults();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- avoid refetch loops from unstable showAlert
+  }, []);
 
   const handleRealtimeChanges = useCallback((payload: { eventType: string; new: Result; old: Result }) => {
     setResults(prev => {

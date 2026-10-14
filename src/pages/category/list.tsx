@@ -76,7 +76,12 @@ const CategoryListPage: FC = function () {
                 <CategoriesTable categories={categories.filter((category) => category.name.toLowerCase().includes(searchValue.toLowerCase()))} />
 
               ) : (
-                <div className="p-4 text-center">No categories found</div>
+                <div className="p-8 text-center text-gray-600 dark:text-gray-300">
+                  <p className="mb-2 text-lg font-medium">No categories found</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Add a category to get started.
+                  </p>
+                </div>
               )}
             </div>
           </div>

@@ -14,7 +14,7 @@ const NavbarSidebarLayout: React.FC<PropsWithChildren<NavbarSidebarLayoutProps>>
     return (
       <SidebarProvider>
         <Navbar />
-        <div className="flex items-start pt-16">
+        <div className="flex min-h-screen items-start bg-gray-50 pt-16 dark:bg-gray-900">
           <Sidebar />
           <MainContent isFooter={isFooter}>{children}</MainContent>
         </div>
@@ -31,7 +31,7 @@ const MainContent: React.FC<PropsWithChildren<NavbarSidebarLayoutProps>> = funct
   return (
     <main
       className={classNames(
-        "overflow-y-auto relative w-full h-full bg-gray-50 dark:bg-gray-900",
+        "relative w-full min-h-[calc(100vh-4rem)] overflow-y-auto bg-gray-50 dark:bg-gray-900",
         isSidebarOpen ? "lg:ml-16" : "lg:ml-64"
       )}
     >

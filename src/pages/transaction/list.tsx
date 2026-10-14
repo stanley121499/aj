@@ -28,10 +28,24 @@ const TransactionListPage: FC = function () {
   const { transactions, loading } = useTransactionContext();
   const { users } = useUserContext();
   const [searchValue, setSearchValue] = React.useState("");
-  const { user_detail, user } = useAuthContext();
+  const { user_detail, user, loading: authLoading } = useAuthContext();
 
-  if (loading || !user_detail) {
+  // LoadingPage only while fetches run — never treat a missing profile as forever-loading.
+  if (loading || authLoading) {
     return <LoadingPage />;
+  }
+
+  if (!user_detail) {
+    return (
+      <NavbarSidebarLayout>
+        <div className="p-8 text-center text-gray-600 dark:text-gray-300">
+          <p className="mb-2 text-lg font-medium">Unable to load profile</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Sign out and sign in again, then retry this page.
+          </p>
+        </div>
+      </NavbarSidebarLayout>
+    );
   }
 
   const isStaff =
@@ -39,7 +53,14 @@ const TransactionListPage: FC = function () {
 
   const renderTransactionTable = () => {
     if (transactions.length === 0) {
-      return <div className="p-4 text-center">No transactions found</div>;
+      return (
+        <div className="p-8 text-center text-gray-600 dark:text-gray-300">
+          <p className="mb-2 text-lg font-medium">No transactions found</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Transactions appear when notes or results update balances.
+          </p>
+        </div>
+      );
     }
 
     const filteredTransactions =
@@ -48,11 +69,25 @@ const TransactionListPage: FC = function () {
             (transaction) =>
               Boolean(user?.id) && transaction.user_id === user?.id
           )
-        : transactions.filter((transaction) =>
-            users
-              .find((u) => u.id === transaction.user_id)
-              ?.email.includes(searchValue)
-          );
+        : transactions.filter((transaction) => {
+            if (!searchValue) {
+              return true;
+            }
+            const email =
+              users.find((u) => u.id === transaction.user_id)?.email ?? "";
+            return email.includes(searchValue);
+          });
+
+    if (filteredTransactions.length === 0) {
+      return (
+        <div className="p-8 text-center text-gray-600 dark:text-gray-300">
+          <p className="mb-2 text-lg font-medium">No matching transactions</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Try a different search.
+          </p>
+        </div>
+      );
+    }
 
     return (
       <TransactionsTable

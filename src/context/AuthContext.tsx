@@ -86,7 +86,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
         const nextUser = session?.user || null;
         setUser(nextUser);
         if (nextUser) {
-          // Keep loading true until role/details exist — RoleProtectedRoute needs them.
+          // Do not setLoading(true) here — TOKEN_REFRESHED would flash LoadingPage app-wide.
+          // RoleProtectedRoute waits on `loading` only; missing profile redirects after settle.
           void loadUserDetail(nextUser.id).finally(() => {
             setLoading(false);
           });

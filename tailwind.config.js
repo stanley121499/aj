@@ -1,6 +1,7 @@
 /* eslint-disable no-undef */
 /** @type {import('tailwindcss').Config} */
 module.exports = {
+  darkMode: "class",
   content: [
     "./index.html",
     "./node_modules/flowbite-react/lib/**/*.{js,ts}",

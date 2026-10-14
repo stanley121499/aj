@@ -56,22 +56,42 @@ export function NoteProvider({ children }: Readonly<PropsWithChildren>) {
   const { isBakiEnabled } = useAppSettingsContext();
 
   useEffect(() => {
+    let cancelled = false;
+
     const fetchNotes = async () => {
-      const { data: fetchedNotes, error } = await supabase
-        .from("notes")
-        .select("*")
-        .order("created_at", { ascending: false });
+      try {
+        const { data: fetchedNotes, error } = await supabase
+          .from("notes")
+          .select("*")
+          .order("created_at", { ascending: false });
 
-      if (error) {
+        if (error) {
+          handleNoteError(error, "fetching notes", showAlert);
+        }
+
+        if (!cancelled) {
+          setNotes(fetchedNotes || []);
+        }
+      } catch (error) {
         handleNoteError(error, "fetching notes", showAlert);
+        if (!cancelled) {
+          setNotes([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
-
-      setNotes(fetchedNotes || []);
-      setLoading(false);
     };
 
-    fetchNotes();
-  }, [showAlert]);
+    void fetchNotes();
+
+    return () => {
+      cancelled = true;
+    };
+    // Mount-once fetch; showAlert is stable enough for error reporting.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- avoid refetch loops from unstable showAlert
+  }, []);
 
   const handleRealtimeChanges = useCallback((payload: { eventType: string; new: Note; old: Note }) => {
     setNotes(prev => {

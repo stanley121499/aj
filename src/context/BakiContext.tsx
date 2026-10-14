@@ -35,6 +35,8 @@ export function BakiProvider({ children }: PropsWithChildren) {
   const [currentUserBaki, setCurrentUserBaki] = useState<Baki[]>([]);
 
   useEffect(() => {
+    let cancelled = false;
+
     // When Baki is off, clear local state and skip fetches/alerts for bakis.
     if (!isBakiEnabled) {
       setBakis([]);
@@ -45,22 +47,43 @@ export function BakiProvider({ children }: PropsWithChildren) {
 
     const fetchBakis = async () => {
       setLoading(true);
-      const { data: bakis, error } = await supabase
-        .from('bakis')
-        .select('*');
+      try {
+        const { data: bakis, error } = await supabase
+          .from("bakis")
+          .select("*");
 
-      if (error) {
-        console.error('Error fetching bakis:', error);
-        showAlert('Error fetching bakis', 'error');
+        if (error) {
+          console.error("Error fetching bakis:", error);
+          showAlert("Error fetching bakis", "error");
+        }
+
+        if (!cancelled) {
+          setBakis(bakis || []);
+          setCurrentUserBaki(
+            bakis?.filter((baki) => baki.user_id === user?.id) || []
+          );
+        }
+      } catch (error) {
+        console.error("Error fetching bakis:", error);
+        showAlert("Error fetching bakis", "error");
+        if (!cancelled) {
+          setBakis([]);
+          setCurrentUserBaki([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
-
-      setBakis(bakis || []);
-      setCurrentUserBaki(bakis?.filter(baki => baki.user_id === user?.id) || []);
-      setLoading(false);
     };
 
-    fetchBakis();
-  }, [showAlert, user?.id, isBakiEnabled]);
+    void fetchBakis();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- showAlert omitted to avoid refetch loops
+  }, [user?.id, isBakiEnabled]);
 
   const handleRealtimeChanges = useCallback((payload: { eventType: string; new: Baki; old: Baki }) => {
     if (!isBakiEnabled) {

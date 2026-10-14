@@ -4,11 +4,10 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Tailwind dark mode background */
-@media (prefers-color-scheme: dark) {
-  .dark {
-    @apply bg-gray-900 text-gray-300;
-  }
+/* Page background follows Flowbite class-based dark mode (html.dark) */
+html.dark,
+html.dark body {
+  @apply bg-gray-900 text-gray-300;
 }
 
 /* calendar styles */

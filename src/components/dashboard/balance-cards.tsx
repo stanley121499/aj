@@ -30,16 +30,14 @@ function balanceColorClass(balance: number): string {
 }
 
 const BalanceCards: React.FC = function () {
-  const { currentUserAccountBalance } = useAccountBalanceContext();
-  const { currentUserBaki } = useBakiContext();
+  const { currentUserAccountBalance, loading: accountLoading } =
+    useAccountBalanceContext();
+  const { currentUserBaki, loading: bakiLoading } = useBakiContext();
   const { categories } = useCategoryContext();
   const { isBakiEnabled } = useAppSettingsContext();
 
-  if (!currentUserAccountBalance) {
-    return <LoadingPage />;
-  }
-
-  if (isBakiEnabled && !currentUserBaki) {
+  // LoadingPage only while initial fetches run — empty arrays are a valid loaded state.
+  if (accountLoading || (isBakiEnabled && bakiLoading)) {
     return <LoadingPage />;
   }
 
@@ -73,7 +71,12 @@ const BalanceCards: React.FC = function () {
         </div>
         <div className="flow-root">
           <ul className="divide-y divide-gray-200 dark:divide-gray-700">
-            {currentUserAccountBalance?.map((accountBalance) => (
+            {currentUserAccountBalance.length === 0 ? (
+              <li className="py-3 text-sm text-gray-500 dark:text-gray-400 sm:py-4">
+                No account balances yet.
+              </li>
+            ) : (
+              currentUserAccountBalance.map((accountBalance) => (
               <li key={accountBalance.id} className="py-3 sm:py-4">
                 <div className="flex items-center space-x-4">
                   <div className="min-w-0 flex-1">
@@ -97,7 +100,8 @@ const BalanceCards: React.FC = function () {
                   </div>
                 </div>
               </li>
-            ))}
+              ))
+            )}
           </ul>
         </div>
       </Card>
@@ -111,30 +115,36 @@ const BalanceCards: React.FC = function () {
           </div>
           <div className="flow-root">
             <ul className="divide-y divide-gray-200 dark:divide-gray-700">
-              {currentUserBaki?.map((baki) => (
-                <li key={baki.id} className="py-3 sm:py-4">
-                  <div className="flex items-center space-x-4">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-gray-900 dark:text-white">
-                        {
-                          categories.find(
-                            (category) => category.id === baki.category_id
-                          )?.name
-                        }
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {balanceDirectionLabel(baki.balance)}
-                      </p>
-                    </div>
-                    <div
-                      className={`inline-flex items-center text-base font-semibold ${balanceColorClass(
-                        baki.balance
-                      )}`}>
-                      {formatSignedBalance(baki.balance)}
-                    </div>
-                  </div>
+              {currentUserBaki.length === 0 ? (
+                <li className="py-3 text-sm text-gray-500 dark:text-gray-400 sm:py-4">
+                  No baki balances yet.
                 </li>
-              ))}
+              ) : (
+                currentUserBaki.map((baki) => (
+                  <li key={baki.id} className="py-3 sm:py-4">
+                    <div className="flex items-center space-x-4">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-gray-900 dark:text-white">
+                          {
+                            categories.find(
+                              (category) => category.id === baki.category_id
+                            )?.name
+                          }
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {balanceDirectionLabel(baki.balance)}
+                        </p>
+                      </div>
+                      <div
+                        className={`inline-flex items-center text-base font-semibold ${balanceColorClass(
+                          baki.balance
+                        )}`}>
+                        {formatSignedBalance(baki.balance)}
+                      </div>
+                    </div>
+                  </li>
+                ))
+              )}
             </ul>
           </div>
         </Card>
