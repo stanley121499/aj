@@ -19,26 +19,45 @@ import type { Transaction, TransactionTarget } from "../../types/transaction";
 /** Ledger targets supported by the opening-balances CSV. */
 type OpeningLedgerTarget = Extract<TransactionTarget, "account_balance" | "baki">;
 
+/** Safe optional profile fields the CSV may update (role is intentionally excluded). */
+type ProfileFieldKey = "contact_number" | "birthday";
+
+/** One profile field change shown in preview / applied on confirm. */
+interface ProfileFieldChange {
+  field: ProfileFieldKey;
+  from: string | null;
+  to: string;
+}
+
 /** One preview row after CSV parse and lookup. */
 interface OpeningPreviewRow {
   username: string;
   categoryName: string;
   categoryId: number;
   userId: string;
-  /** Which balance the row sets (account_balance or baki). */
-  ledgerTarget: OpeningLedgerTarget;
+  /** Which balance the row sets; null when the row has no balance update. */
+  ledgerTarget: OpeningLedgerTarget | null;
   current: number;
-  /** Signed balance the operator wants after import. */
+  /** Signed balance the operator wants after import; 0 when no balance update. */
   targetBalance: number;
   delta: number;
+  hasBalanceUpdate: boolean;
+  profileChanges: ProfileFieldChange[];
   error: string | null;
 }
 
 interface ParsedCsvRow {
   username: string;
-  category: string;
-  balance: number;
-  ledgerTarget: OpeningLedgerTarget;
+  /** Null when the row does not update a ledger balance. */
+  category: string | null;
+  /** Null when the row does not update a ledger balance. */
+  balance: number | null;
+  /** Null when the row does not update a ledger balance. */
+  ledgerTarget: OpeningLedgerTarget | null;
+  /** Null means leave unchanged (empty CSV cell). */
+  contactNumber: string | null;
+  /** Null means leave unchanged (empty CSV cell). */
+  birthday: string | null;
 }
 
 /**
@@ -48,6 +67,28 @@ interface ParsedCsvRow {
  */
 function formatLedgerTargetLabel(ledgerTarget: OpeningLedgerTarget): string {
   return ledgerTarget === "baki" ? "Baki" : "Account";
+}
+
+/**
+ * Human label for a profile field key.
+ * @param field - Profile field key
+ * @returns Short label for UI
+ */
+function formatProfileFieldLabel(field: ProfileFieldKey): string {
+  if (field === "contact_number") {
+    return "Phone";
+  }
+  return "Birthday";
+}
+
+/**
+ * Formats a profile change for the preview table.
+ * @param change - From/to values for one field
+ * @returns Display string
+ */
+function formatProfileChange(change: ProfileFieldChange): string {
+  const fromLabel = change.from === null || change.from === "" ? "—" : change.from;
+  return `${formatProfileFieldLabel(change.field)}: ${fromLabel} → ${change.to}`;
 }
 
 /**
@@ -67,18 +108,60 @@ function parseLedgerTarget(raw: string): OpeningLedgerTarget | null {
 }
 
 /**
- * Downloads a CSV template for opening-balance import.
- * Baki off: username, category, balance.
- * Baki on: username, category, balance, target (account_balance|baki).
+ * Finds the first matching header index among aliases (case already lowercased).
+ * @param headers - Lowercased CSV header names
+ * @param aliases - Accepted names for one logical column
+ * @returns Index or -1 when missing
+ */
+function findHeaderIndex(headers: string[], aliases: string[]): number {
+  for (const alias of aliases) {
+    const idx = headers.indexOf(alias);
+    if (idx >= 0) {
+      return idx;
+    }
+  }
+  return -1;
+}
+
+/**
+ * Reads an optional string cell; empty means "leave unchanged".
+ * @param fields - Split CSV fields for one row
+ * @param index - Column index, or -1 when column absent
+ * @returns Trimmed value, or null when empty/absent
+ */
+function readOptionalString(fields: string[], index: number): string | null {
+  if (index < 0) {
+    return null;
+  }
+  const value = (fields[index] ?? "").trim();
+  if (value === "") {
+    return null;
+  }
+  return value;
+}
+
+/**
+ * Downloads a CSV template for opening-balance + optional profile import.
+ * Always includes contact_number and birthday. Target column only when Baki is on.
  * @param isBakiEnabled - Whether Baki feature is on
  */
 function downloadOpeningBalancesTemplate(isBakiEnabled: boolean): void {
   const header = isBakiEnabled
-    ? "username,category,balance,target\n"
-    : "username,category,balance\n";
+    ? "username,category,balance,target,contact_number,birthday\n"
+    : "username,category,balance,contact_number,birthday\n";
   const example = isBakiEnabled
-    ? "alice,Default,100,account_balance\nbob,Default,-50,baki\n"
-    : "alice,Default,100\nbob,Default,-50\n";
+    ? [
+        "alice,Default,100,account_balance,09123456789,1/15/1990",
+        "bob,Default,-50,baki,,",
+        "charlie,,,,09998887777,",
+        "",
+      ].join("\n")
+    : [
+        "alice,Default,100,09123456789,1/15/1990",
+        "bob,Default,-50,,",
+        "charlie,,,09998887777,",
+        "",
+      ].join("\n");
   const blob = new Blob([header + example], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -125,10 +208,11 @@ function splitCsvLine(line: string): string[] {
 }
 
 /**
- * Parses a CSV string into opening-balance rows.
- * Required columns: username, category, balance.
- * Optional column: target (account_balance|baki). Defaults to account_balance.
- * When Baki is off, rows with target=baki throw a clear error.
+ * Parses a CSV string into opening-balance / profile rows.
+ * Required column: username.
+ * Balance columns (category, balance, optional target): when present on a row, set OPENING.
+ * Optional profile columns: contact_number (or phone), birthday — empty cells leave unchanged.
+ * Role is never imported from CSV.
  * @param csvText - Raw CSV file contents
  * @param isBakiEnabled - Whether Baki feature is on
  * @returns Parsed rows
@@ -144,48 +228,119 @@ function parseOpeningCsv(csvText: string, isBakiEnabled: boolean): ParsedCsvRow[
   }
 
   const headers = splitCsvLine(lines[0]).map((h) => h.toLowerCase());
-  const usernameIdx = headers.indexOf("username");
-  const categoryIdx = headers.indexOf("category");
-  const balanceIdx = headers.indexOf("balance");
-  const targetIdx = headers.indexOf("target");
+  const usernameIdx = findHeaderIndex(headers, ["username"]);
+  const categoryIdx = findHeaderIndex(headers, ["category"]);
+  const balanceIdx = findHeaderIndex(headers, ["balance"]);
+  const targetIdx = findHeaderIndex(headers, ["target"]);
+  const contactIdx = findHeaderIndex(headers, ["contact_number", "phone"]);
+  const birthdayIdx = findHeaderIndex(headers, ["birthday"]);
 
-  if (usernameIdx < 0 || categoryIdx < 0 || balanceIdx < 0) {
-    throw new Error("CSV must include username, category, balance columns");
+  if (usernameIdx < 0) {
+    throw new Error("CSV must include a username column");
+  }
+
+  const hasBalanceColumns = categoryIdx >= 0 && balanceIdx >= 0;
+  const hasProfileColumns = contactIdx >= 0 || birthdayIdx >= 0;
+
+  if (!hasBalanceColumns && !hasProfileColumns) {
+    throw new Error(
+      "CSV must include category+balance and/or contact_number/phone/birthday columns"
+    );
+  }
+
+  if ((categoryIdx >= 0) !== (balanceIdx >= 0)) {
+    throw new Error("CSV must include both category and balance columns together");
   }
 
   const rows: ParsedCsvRow[] = [];
   for (let i = 1; i < lines.length; i += 1) {
     const fields = splitCsvLine(lines[i]);
     const username = (fields[usernameIdx] ?? "").trim();
-    const category = (fields[categoryIdx] ?? "").trim();
-    const balanceRaw = (fields[balanceIdx] ?? "").trim();
+    const categoryRaw =
+      categoryIdx >= 0 ? (fields[categoryIdx] ?? "").trim() : "";
+    const balanceRaw =
+      balanceIdx >= 0 ? (fields[balanceIdx] ?? "").trim() : "";
     const targetRaw = targetIdx >= 0 ? (fields[targetIdx] ?? "").trim() : "";
+    const contactNumber = readOptionalString(fields, contactIdx);
+    const birthday = readOptionalString(fields, birthdayIdx);
 
-    if (!username && !category && !balanceRaw && !targetRaw) {
+    if (
+      !username &&
+      !categoryRaw &&
+      !balanceRaw &&
+      !targetRaw &&
+      contactNumber === null &&
+      birthday === null
+    ) {
       continue;
     }
 
-    const balance = Number(balanceRaw.replace(/,/g, ""));
-    if (!username || !category || isNaN(balance)) {
+    if (!username) {
+      throw new Error(`Invalid row (username required): ${lines[i]}`);
+    }
+
+    const hasBalanceCell = categoryRaw !== "" || balanceRaw !== "";
+    let category: string | null = null;
+    let balance: number | null = null;
+    let ledgerTarget: OpeningLedgerTarget | null = null;
+
+    if (hasBalanceCell) {
+      if (!hasBalanceColumns) {
+        throw new Error(
+          `Balance values require category and balance columns: ${lines[i]}`
+        );
+      }
+      if (!categoryRaw || balanceRaw === "") {
+        throw new Error(
+          `Invalid balance row (need category and numeric balance): ${lines[i]}`
+        );
+      }
+      const parsedBalance = Number(balanceRaw.replace(/,/g, ""));
+      if (isNaN(parsedBalance)) {
+        throw new Error(
+          `Invalid row (need username, category, numeric balance): ${lines[i]}`
+        );
+      }
+
+      const parsedTarget = parseLedgerTarget(targetRaw);
+      if (parsedTarget === null) {
+        throw new Error(
+          `Invalid target (use account_balance or baki): ${lines[i]}`
+        );
+      }
+      if (parsedTarget === "baki" && !isBakiEnabled) {
+        throw new Error(
+          `Baki is disabled — cannot import baki rows (line: ${lines[i]})`
+        );
+      }
+
+      category = categoryRaw;
+      balance = parsedBalance;
+      ledgerTarget = parsedTarget;
+    } else if (targetRaw !== "") {
       throw new Error(
-        `Invalid row (need username, category, numeric balance): ${lines[i]}`
+        `Target requires category and balance on the same row: ${lines[i]}`
       );
     }
 
-    const ledgerTarget = parseLedgerTarget(targetRaw);
-    if (ledgerTarget === null) {
+    if (
+      balance === null &&
+      contactNumber === null &&
+      birthday === null
+    ) {
       throw new Error(
-        `Invalid target (use account_balance or baki): ${lines[i]}`
+        `Row has nothing to import (balance and/or phone/birthday): ${lines[i]}`
       );
     }
 
-    if (ledgerTarget === "baki" && !isBakiEnabled) {
-      throw new Error(
-        `Baki is disabled — cannot import baki rows (line: ${lines[i]})`
-      );
-    }
-
-    rows.push({ username, category, balance, ledgerTarget });
+    rows.push({
+      username,
+      category,
+      balance,
+      ledgerTarget,
+      contactNumber,
+      birthday,
+    });
   }
 
   if (rows.length === 0) {
@@ -196,7 +351,31 @@ function parseOpeningCsv(csvText: string, isBakiEnabled: boolean): ParsedCsvRow[
 }
 
 /**
- * Admin UI: download template, upload CSV, preview diffs, confirm OPENING txs.
+ * Builds the partial user_details update payload from profile changes.
+ * @param changes - Preview profile changes
+ * @returns Supabase update object, or null when empty
+ */
+function buildProfileUpdatePayload(
+  changes: ProfileFieldChange[]
+): { contact_number?: string; birthday?: string } | null {
+  if (changes.length === 0) {
+    return null;
+  }
+
+  const payload: { contact_number?: string; birthday?: string } = {};
+  for (const change of changes) {
+    if (change.field === "contact_number") {
+      payload.contact_number = change.to;
+    } else if (change.field === "birthday") {
+      payload.birthday = change.to;
+    }
+  }
+  return payload;
+}
+
+/**
+ * Admin UI: download template, upload CSV, preview diffs, confirm OPENING txs
+ * and optional user_details profile updates (phone / birthday).
  * Replace semantics: prior OPENING txs for the same user×category×target are reversed first.
  */
 const OpeningBalancesCard: React.FC = function () {
@@ -215,10 +394,19 @@ const OpeningBalancesCard: React.FC = function () {
 
   const summary = useMemo(() => {
     const valid = previewRows.filter((row) => row.error === null);
-    const netChange = valid.reduce((acc, row) => acc + row.delta, 0);
+    const actionable = valid.filter(
+      (row) =>
+        (row.hasBalanceUpdate && row.delta !== 0) ||
+        row.profileChanges.length > 0
+    );
+    const netChange = valid.reduce(
+      (acc, row) => (row.hasBalanceUpdate ? acc + row.delta : acc),
+      0
+    );
     return {
       rowCount: previewRows.length,
       validCount: valid.length,
+      actionableCount: actionable.length,
       errorCount: previewRows.length - valid.length,
       netChange,
     };
@@ -231,10 +419,15 @@ const OpeningBalancesCard: React.FC = function () {
     [isBakiEnabled, previewRows]
   );
 
+  const showProfileColumn = useMemo(
+    () => previewRows.some((row) => row.profileChanges.length > 0),
+    [previewRows]
+  );
+
   /**
    * Builds preview rows from parsed CSV against live users/categories/balances.
    * @param parsedRows - Rows from parseOpeningCsv
-   * @returns Preview rows with current/target/delta or row errors
+   * @returns Preview rows with current/target/delta, profile diffs, or row errors
    */
   const buildPreview = useCallback(
     (parsedRows: ParsedCsvRow[]): OpeningPreviewRow[] => {
@@ -243,54 +436,106 @@ const OpeningBalancesCard: React.FC = function () {
         const user = users.find(
           (u) => normalizeUsername(u.email.split("@")[0] ?? "") === usernameKey
         );
-        const category = categories.find(
-          (c) => c.name.trim().toLowerCase() === row.category.trim().toLowerCase()
-        );
+
+        const emptyBalancePreview = {
+          username: row.username,
+          categoryName: row.category ?? "",
+          categoryId: 0,
+          userId: "",
+          ledgerTarget: row.ledgerTarget,
+          current: 0,
+          targetBalance: row.balance ?? 0,
+          delta: 0,
+          hasBalanceUpdate: row.balance !== null,
+          profileChanges: [] as ProfileFieldChange[],
+          error: null as string | null,
+        };
 
         if (!user) {
           return {
-            username: row.username,
-            categoryName: row.category,
-            categoryId: 0,
-            userId: "",
-            ledgerTarget: row.ledgerTarget,
-            current: 0,
-            targetBalance: row.balance,
-            delta: 0,
+            ...emptyBalancePreview,
             error: `User not found: ${row.username}`,
           };
         }
 
-        if (!category) {
+        const profileChanges: ProfileFieldChange[] = [];
+        const currentContact = user.user_detail?.contact_number ?? null;
+        const currentBirthday = user.user_detail?.birthday ?? null;
+
+        if (row.contactNumber !== null && row.contactNumber !== currentContact) {
+          profileChanges.push({
+            field: "contact_number",
+            from: currentContact,
+            to: row.contactNumber,
+          });
+        }
+        if (row.birthday !== null && row.birthday !== currentBirthday) {
+          profileChanges.push({
+            field: "birthday",
+            from: currentBirthday,
+            to: row.birthday,
+          });
+        }
+
+        const rowCategory = row.category;
+        const rowBalance = row.balance;
+        const rowLedgerTarget = row.ledgerTarget;
+
+        if (rowBalance === null || rowCategory === null || rowLedgerTarget === null) {
           return {
             username: row.username,
-            categoryName: row.category,
+            categoryName: "",
             categoryId: 0,
             userId: user.id,
-            ledgerTarget: row.ledgerTarget,
+            ledgerTarget: null,
             current: 0,
-            targetBalance: row.balance,
+            targetBalance: 0,
             delta: 0,
-            error: `Category not found: ${row.category}`,
+            hasBalanceUpdate: false,
+            profileChanges,
+            error: null,
           };
         }
 
-        if (row.ledgerTarget === "baki" && !isBakiEnabled) {
+        const category = categories.find(
+          (c) =>
+            c.name.trim().toLowerCase() === rowCategory.trim().toLowerCase()
+        );
+
+        if (!category) {
+          return {
+            username: row.username,
+            categoryName: rowCategory,
+            categoryId: 0,
+            userId: user.id,
+            ledgerTarget: rowLedgerTarget,
+            current: 0,
+            targetBalance: rowBalance,
+            delta: 0,
+            hasBalanceUpdate: true,
+            profileChanges,
+            error: `Category not found: ${rowCategory}`,
+          };
+        }
+
+        if (rowLedgerTarget === "baki" && !isBakiEnabled) {
           return {
             username: row.username,
             categoryName: category.name,
             categoryId: category.id,
             userId: user.id,
-            ledgerTarget: row.ledgerTarget,
+            ledgerTarget: rowLedgerTarget,
             current: 0,
-            targetBalance: row.balance,
+            targetBalance: rowBalance,
             delta: 0,
+            hasBalanceUpdate: true,
+            profileChanges,
             error: "Baki is disabled — cannot import baki rows",
           };
         }
 
         const current =
-          row.ledgerTarget === "baki"
+          rowLedgerTarget === "baki"
             ? (bakis.find(
                 (b) => b.user_id === user.id && b.category_id === category.id
               )?.balance ?? 0)
@@ -298,7 +543,7 @@ const OpeningBalancesCard: React.FC = function () {
                 (ab) => ab.user_id === user.id && ab.category_id === category.id
               )?.balance ?? 0);
 
-        const targetBalance = row.balance;
+        const targetBalance = rowBalance;
         const delta = targetBalance - current;
 
         return {
@@ -306,10 +551,12 @@ const OpeningBalancesCard: React.FC = function () {
           categoryName: category.name,
           categoryId: category.id,
           userId: user.id,
-          ledgerTarget: row.ledgerTarget,
+          ledgerTarget: rowLedgerTarget,
           current,
           targetBalance,
           delta,
+          hasBalanceUpdate: true,
+          profileChanges,
           error: null,
         };
       });
@@ -372,7 +619,31 @@ const OpeningBalancesCard: React.FC = function () {
   );
 
   /**
-   * Confirms import: reverse prior OPENING for each row, then post new OPENING deltas.
+   * Applies profile field updates for one user (empty cells already excluded).
+   * @param userId - Auth user id
+   * @param changes - Profile field changes to write
+   */
+  const applyProfileChanges = async (
+    userId: string,
+    changes: ProfileFieldChange[]
+  ): Promise<void> => {
+    const payload = buildProfileUpdatePayload(changes);
+    if (payload === null) {
+      return;
+    }
+
+    const { error } = await supabase
+      .from("user_details")
+      .update(payload)
+      .eq("user_id", userId);
+
+    if (error) {
+      throw new Error(`Failed to update profile for user ${userId}: ${error.message}`);
+    }
+  };
+
+  /**
+   * Confirms import: optional profile updates, reverse prior OPENING, then post new OPENING deltas.
    */
   const handleConfirm = async () => {
     if (!isAdmin || isConfirming) {
@@ -380,14 +651,27 @@ const OpeningBalancesCard: React.FC = function () {
     }
 
     const validRows = previewRows.filter((row) => row.error === null);
-    if (validRows.length === 0) {
-      showAlert("No valid rows to import", "error");
+    const actionableRows = validRows.filter(
+      (row) =>
+        (row.hasBalanceUpdate && row.delta !== 0) ||
+        row.profileChanges.length > 0
+    );
+    if (actionableRows.length === 0) {
+      showAlert("No changes to import", "error");
       return;
     }
 
     setIsConfirming(true);
     try {
       for (const row of validRows) {
+        if (row.profileChanges.length > 0) {
+          await applyProfileChanges(row.userId, row.profileChanges);
+        }
+
+        if (!row.hasBalanceUpdate || row.ledgerTarget === null) {
+          continue;
+        }
+
         if (row.ledgerTarget === "baki" && !isBakiEnabled) {
           throw new Error("Baki is disabled — cannot import baki rows");
         }
@@ -468,7 +752,7 @@ const OpeningBalancesCard: React.FC = function () {
         });
       }
 
-      showAlert("Opening balances applied", "success");
+      showAlert("Opening balances and profile fields applied", "success");
       setPreviewRows([]);
     } catch (error) {
       console.error("Opening balances import failed:", error);
@@ -493,11 +777,13 @@ const OpeningBalancesCard: React.FC = function () {
         </h3>
         <p className="mb-4 text-sm font-normal text-gray-500 dark:text-gray-400">
           Import a CSV of signed targets (positive = they owe, negative = we owe them).
-          Each row posts an audit-friendly OPENING transaction. Re-import replaces prior
+          Each balance row posts an audit-friendly OPENING transaction. Re-import replaces prior
           OPENING rows for the same user, category, and target.
+          Optional profile columns update user details when filled; empty cells leave existing
+          values unchanged. Role is not imported from CSV.
           {isBakiEnabled
-            ? " Columns: username, category, balance, target — where target is account_balance or baki."
-            : " Columns: username, category, balance (Account balance only; Baki rows are rejected while Baki is off)."}
+            ? " Columns: username, category, balance, target (account_balance|baki), contact_number (or phone), birthday. A row may set balance only, profile only, or both."
+            : " Columns: username, category, balance, contact_number (or phone), birthday. A row may set balance only, profile only, or both (Baki rows are rejected while Baki is off)."}
         </p>
 
         <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -526,7 +812,9 @@ const OpeningBalancesCard: React.FC = function () {
                 ? ` (${summary.errorCount} errors)`
                 : ""}
               {" · "}
-              Net change {formatSignedBalance(summary.netChange)}
+              {summary.actionableCount} with changes
+              {" · "}
+              Net balance change {formatSignedBalance(summary.netChange)}
             </p>
             <div className="mb-4 max-h-80 overflow-auto">
               <Table>
@@ -537,47 +825,76 @@ const OpeningBalancesCard: React.FC = function () {
                     <Table.HeadCell>Target</Table.HeadCell>
                   )}
                   <Table.HeadCell>Current → Target</Table.HeadCell>
+                  {showProfileColumn && (
+                    <Table.HeadCell>Profile</Table.HeadCell>
+                  )}
                   <Table.HeadCell>Status</Table.HeadCell>
                 </Table.Head>
                 <Table.Body>
-                  {previewRows.map((row) => (
-                    <Table.Row
-                      key={`${row.username}-${row.categoryName}-${row.ledgerTarget}-${row.targetBalance}`}>
-                      <Table.Cell>{row.username}</Table.Cell>
-                      <Table.Cell>{row.categoryName}</Table.Cell>
-                      {showLedgerTargetColumn && (
+                  {previewRows.map((row, rowIndex) => {
+                    const rowKey = [
+                      row.username,
+                      row.categoryName,
+                      row.ledgerTarget ?? "profile",
+                      String(row.targetBalance),
+                      String(rowIndex),
+                    ].join("-");
+                    const hasBalanceChange =
+                      row.hasBalanceUpdate && row.delta !== 0;
+                    const hasProfileChange = row.profileChanges.length > 0;
+                    return (
+                      <Table.Row key={rowKey}>
+                        <Table.Cell>{row.username}</Table.Cell>
                         <Table.Cell>
-                          {formatLedgerTargetLabel(row.ledgerTarget)}
+                          {row.hasBalanceUpdate ? row.categoryName : "—"}
                         </Table.Cell>
-                      )}
-                      <Table.Cell>
-                        {row.error
-                          ? "—"
-                          : previewBalanceChange(row.current, row.delta)}
-                      </Table.Cell>
-                      <Table.Cell>
-                        {row.error ? (
-                          <span className="text-red-600 dark:text-red-400">
-                            {row.error}
-                          </span>
-                        ) : row.delta === 0 ? (
-                          <span className="text-gray-500">No change</span>
-                        ) : (
-                          <span className="text-green-700 dark:text-green-400">
-                            Ready
-                          </span>
+                        {showLedgerTargetColumn && (
+                          <Table.Cell>
+                            {row.ledgerTarget
+                              ? formatLedgerTargetLabel(row.ledgerTarget)
+                              : "—"}
+                          </Table.Cell>
                         )}
-                      </Table.Cell>
-                    </Table.Row>
-                  ))}
+                        <Table.Cell>
+                          {row.error
+                            ? "—"
+                            : row.hasBalanceUpdate
+                              ? previewBalanceChange(row.current, row.delta)
+                              : "—"}
+                        </Table.Cell>
+                        {showProfileColumn && (
+                          <Table.Cell>
+                            {row.profileChanges.length === 0
+                              ? "—"
+                              : row.profileChanges
+                                  .map((change) => formatProfileChange(change))
+                                  .join("; ")}
+                          </Table.Cell>
+                        )}
+                        <Table.Cell>
+                          {row.error ? (
+                            <span className="text-red-600 dark:text-red-400">
+                              {row.error}
+                            </span>
+                          ) : !hasBalanceChange && !hasProfileChange ? (
+                            <span className="text-gray-500">No change</span>
+                          ) : (
+                            <span className="text-green-700 dark:text-green-400">
+                              Ready
+                            </span>
+                          )}
+                        </Table.Cell>
+                      </Table.Row>
+                    );
+                  })}
                 </Table.Body>
               </Table>
             </div>
             <Button
               color="primary"
-              disabled={isConfirming || summary.validCount === 0}
+              disabled={isConfirming || summary.actionableCount === 0}
               onClick={handleConfirm}>
-              {isConfirming ? "Applying..." : "Confirm opening balances"}
+              {isConfirming ? "Applying..." : "Confirm import"}
             </Button>
           </>
         )}
