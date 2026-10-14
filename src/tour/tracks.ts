@@ -13,13 +13,13 @@ export const TOUR_TRACKS: TourTrack[] = [
   {
     id: "check-balance",
     title: "Check my balance",
-    summary: "See per-category signed balances and what above/below zero means.",
+    summary: "See per-category balances and who owes whom (you owe vs we owe you).",
     roles: ["customer", "employee", "admin"],
     steps: [
       {
         id: "cb-1",
         title: "Your balance cards",
-        tip: "Each category has a signed total. Green = Above 0, red = Below 0, gray = Zero — labels, not good/bad.",
+        tip: "Each category shows who owes whom. Green = You owe, red = We owe you, gray = Settled.",
         route: "/dashboard",
         target: "balance-cards",
         placement: "bottom",
@@ -27,7 +27,7 @@ export const TOUR_TRACKS: TourTrack[] = [
       {
         id: "cb-2",
         title: "Read the legend",
-        tip: "Match colors to Above 0 / Below 0 / Zero anytime you are unsure.",
+        tip: "Match colors to You owe / We owe you / Settled anytime you are unsure.",
         route: "/dashboard",
         target: "balance-legend",
         placement: "bottom",
@@ -35,7 +35,7 @@ export const TOUR_TRACKS: TourTrack[] = [
       {
         id: "cb-3",
         title: "Review history anytime",
-        tip: "Transactions show ↑ (balance up) and ↓ (balance down) with a Source badge — not debit/credit jargon.",
+        tip: "Transactions show ↑ (balance up → you owe more) and ↓ (balance down → we owe you more) with a Source badge.",
         route: "/dashboard",
         target: "nav-transactions",
         placement: "right",
@@ -69,13 +69,13 @@ export const TOUR_TRACKS: TourTrack[] = [
   {
     id: "review-history",
     title: "Review my history",
-    summary: "Read ↑/↓ effects and Source badges.",
+    summary: "Read ↑/↓ effects in owe terms and Source badges.",
     roles: ["customer", "employee", "admin"],
     steps: [
       {
         id: "rh-1",
         title: "Open Transactions",
-        tip: "Scan Effect (↑/↓) and Source (Note, Result, Opening, Payout). ↑ = balance up; ↓ = balance down.",
+        tip: "Scan Effect (↑/↓) and Source (Note, Result, Opening, Payout). ↑ = you owe more; ↓ = we owe you more.",
         route: "/transactions",
         target: "nav-transactions",
         placement: "right",
@@ -83,7 +83,7 @@ export const TOUR_TRACKS: TourTrack[] = [
       {
         id: "rh-2",
         title: "Your ledger",
-        tip: "Each row shows how the signed balance moved — not who-owes-whom language.",
+        tip: "Each row shows how the balance moved and what that means for who owes whom.",
         route: "/transactions",
         target: "transactions-page",
         placement: "bottom",
@@ -107,7 +107,7 @@ export const TOUR_TRACKS: TourTrack[] = [
       {
         id: "an-2",
         title: "Review pending notes",
-        tip: "Approval applies the note credit/debit and moves the balance. Positive note → balance down.",
+        tip: "Approval applies the note credit/debit and moves the balance. Positive note → balance ↓ (toward we owe you).",
         route: "/notes",
         target: "notes-page",
         placement: "bottom",
@@ -141,13 +141,13 @@ export const TOUR_TRACKS: TourTrack[] = [
   {
     id: "orange-adjust",
     title: "Orange adjustments",
-    summary: "Fix below-zero users with signed math (increase → up, decrease → down).",
+    summary: "Fix users we owe (below zero) with signed math (increase → up, decrease → down).",
     roles: ["employee", "admin"],
     steps: [
       {
         id: "oa-1",
         title: "Open Orange",
-        tip: "Orange lists users with below-zero balances. Increase moves balance up; decrease moves it down.",
+        tip: "Orange lists users we owe (below-zero balances). Increase moves balance up (they owe more); decrease moves it down (we owe them more).",
         route: "/orange",
         target: "nav-orange",
         placement: "right",
@@ -155,7 +155,7 @@ export const TOUR_TRACKS: TourTrack[] = [
       {
         id: "oa-2",
         title: "Adjust carefully",
-        tip: "Clear all only zeroes below-zero balances. Keep the Orange name in nav and pages.",
+        tip: "Clear all only zeroes balances we owe (below zero). Keep the Orange name in nav and pages.",
         route: "/orange",
         target: "orange-page",
         placement: "bottom",

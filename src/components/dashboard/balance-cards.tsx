@@ -13,8 +13,8 @@ import {
 import LoadingPage from "../../pages/pages/loading";
 
 /**
- * Returns Tailwind text color for a signed balance (paired with direction labels).
- * Green = above zero; red = below zero; gray = zero — not "good/bad".
+ * Returns Tailwind text color for a signed balance (paired with owe labels).
+ * Green = you owe (above 0); red = we owe you (below 0); gray = settled.
  * @param balance - Signed balance value
  * @returns CSS class string
  */

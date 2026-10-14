@@ -26,8 +26,8 @@ const UserSettingsPage: FC = function () {
             Settings
           </h1>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Admin controls for balances and features. Balances use above/below zero —
-            not who-owes framing.
+            Admin controls for balances and features. Above zero = they owe; below
+            zero = we owe them; zero = settled.
           </p>
         </div>
 

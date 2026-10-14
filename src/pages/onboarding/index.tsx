@@ -132,7 +132,7 @@ const OnboardingPage: React.FC = function () {
             </h2>
             <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-gray-700 dark:text-gray-300">
               <li>
-                A signed balance is a running total — above zero, below zero, or zero.
+                A signed balance is a running total: above zero = you owe, below zero = we owe you, zero = settled.
               </li>
               <li>{NOTE_ENTRY_TIP}</li>
               <li>{RESULT_ENTRY_TIP}</li>

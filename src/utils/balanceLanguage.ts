@@ -7,6 +7,13 @@ export type BalanceSourceLabel = "NOTE" | "RESULT" | "PAYOUT" | "OPENING";
 export type BalanceDirection = "above" | "below" | "zero";
 
 /**
+ * Whose perspective labels use for who-owes-whom copy.
+ * - self: customer (or anyone) viewing their own balance
+ * - staff: operators viewing another user's balance
+ */
+export type BalanceAudience = "self" | "staff";
+
+/**
  * Formats a signed balance for display (e.g. "$1,234.56" or "-$40.00").
  * @param balance - Signed balance value
  * @returns Locale-formatted currency string with sign
@@ -38,6 +45,7 @@ export function formatMoney(amount: number): string {
 
 /**
  * Classifies a signed balance relative to zero.
+ * Canonical math: above → user owes house; below → house owes user; zero → settled.
  * @param balance - Signed balance value
  * @returns Direction key used by labels and colors
  */
@@ -52,39 +60,70 @@ export function getBalanceDirection(balance: number): BalanceDirection {
 }
 
 /**
- * Short direction label for legends and badges.
+ * Who-owes-whom label for a signed balance.
+ * Balance > 0 → user owes house; balance < 0 → house owes user; 0 → settled.
  * @param balance - Signed balance value
- * @returns "Above 0", "Below 0", or "Zero"
+ * @param audience - self ("You owe") vs staff ("They owe")
+ * @returns Direction label for legends, badges, and cards
  */
-export function balanceDirectionLabel(balance: number): string {
+export function balanceDirectionLabel(
+  balance: number,
+  audience: BalanceAudience = "self"
+): string {
   const direction = getBalanceDirection(balance);
   if (direction === "above") {
-    return "Above 0";
+    return audience === "staff" ? "They owe" : "You owe";
   }
   if (direction === "below") {
-    return "Below 0";
+    return audience === "staff" ? "We owe them" : "We owe you";
   }
-  return "Zero";
+  return "Settled";
 }
 
-/** Compact legend labels shared by balance cards and onboarding. */
+/** Compact legend labels for customer / self-view balance cards. */
 export const BALANCE_LEGEND_LABELS = {
-  above: "Above 0",
-  below: "Below 0",
-  zero: "Zero",
+  above: "You owe",
+  below: "We owe you",
+  zero: "Settled",
 } as const;
 
-/** Tip for note entry: positive money in moves balance down. */
-export const NOTE_ENTRY_TIP =
-  "Positive amount = money in → balance goes down. Negative amount = money out → balance goes up.";
+/** Compact legend labels for staff views of other users. */
+export const BALANCE_LEGEND_LABELS_STAFF = {
+  above: "They owe",
+  below: "We owe them",
+  zero: "Settled",
+} as const;
 
-/** Tip for result entry: positive outcome moves balance up. */
+/**
+ * Legend copy for the given audience.
+ * @param audience - self vs staff wording
+ * @returns Legend label map
+ */
+export function balanceLegendLabels(
+  audience: BalanceAudience = "self"
+): typeof BALANCE_LEGEND_LABELS | typeof BALANCE_LEGEND_LABELS_STAFF {
+  return audience === "staff"
+    ? BALANCE_LEGEND_LABELS_STAFF
+    : BALANCE_LEGEND_LABELS;
+}
+
+/**
+ * Tip for note entry: positive money in moves balance down (credit).
+ * Does not share sign convention with results.
+ */
+export const NOTE_ENTRY_TIP =
+  "Positive amount = money in → balance ↓ (toward we owe you). Negative amount = money out → balance ↑ (toward you owe).";
+
+/**
+ * Tip for result entry: positive outcome moves balance up (debit).
+ * Does not share sign convention with notes.
+ */
 export const RESULT_ENTRY_TIP =
-  "Positive amount = balance goes up. Negative amount = balance goes down.";
+  "Positive amount = balance ↑ (toward they owe). Negative amount = balance ↓ (toward we owe them).";
 
 /** Side-by-side contrast used in result helpers and onboarding. */
 export const NOTE_VS_RESULT_CONTRAST =
-  "$100 note → balance ↓; $100 result → balance ↑";
+  "$100 note → balance ↓ (we owe more / you owe less); $100 result → balance ↑ (they/you owe more)";
 
 /**
  * Runtime balance delta from type + amount.
@@ -102,20 +141,27 @@ export function balanceChangeFromType(
 }
 
 /**
- * Arrow + amount label for ledger rows.
+ * Arrow + amount label for ledger rows, with who-owes-whom effect hint.
+ * Debit = balance up = more owed by the user; credit = balance down = more we owe.
  * @param type - Transaction type (debit = up, credit = down)
  * @param amount - Stored positive amount
- * @returns e.g. "↑ $60.00" or "↓ $60.00"
+ * @param audience - self vs staff wording for the owe hint
+ * @returns e.g. "↑ $60.00 (you owe more)" or "↓ $60.00 (we owe them more)"
  */
 export function arrowEffectLabel(
   type: TransactionType,
-  amount: number
+  amount: number,
+  audience: BalanceAudience = "self"
 ): string {
   const money = formatMoney(amount);
   if (type === "debit") {
-    return `↑ ${money}`;
+    const hint =
+      audience === "staff" ? "they owe more" : "you owe more";
+    return `↑ ${money} (${hint})`;
   }
-  return `↓ ${money}`;
+  const hint =
+    audience === "staff" ? "we owe them more" : "we owe you more";
+  return `↓ ${money} (${hint})`;
 }
 
 /**

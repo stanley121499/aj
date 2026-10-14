@@ -39,7 +39,7 @@ const ViewMediaModal: React.FC<ViewMediaModalProps> = function ({ mediaURL }) {
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-1">
             {loadedImageURL ? (
               <img
-                className="object-contain w-full h-full"
+                className="h-auto max-h-[70vh] w-full object-contain"
                 src={loadedImageURL}
                 alt={mediaURL}
               />

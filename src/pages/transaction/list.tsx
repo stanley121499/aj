@@ -18,6 +18,7 @@ import {
   formatMoney,
   humanizeSource,
   humanizeTarget,
+  type BalanceAudience,
 } from "../../utils/balanceLanguage";
 import type { TransactionType } from "../../types/transaction";
 
@@ -93,6 +94,7 @@ const TransactionListPage: FC = function () {
       <TransactionsTable
         transactions={filteredTransactions}
         showDebitCredit={isStaff}
+        effectAudience={isStaff ? "staff" : "self"}
       />
     );
   };
@@ -108,7 +110,7 @@ const TransactionListPage: FC = function () {
               All Transactions
             </h1>
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              ↑ means balance up; ↓ means balance down.
+              ↑ balance up (you/they owe more); ↓ balance down (we owe you/them more).
             </p>
           </div>
           <div className="sm:flex">
@@ -150,6 +152,8 @@ interface TransactionsTableProps {
   transactions: Transaction[];
   /** When true (admin/employee), show muted Debit/Credit secondary text. */
   showDebitCredit: boolean;
+  /** Who-owes-whom wording for ↑/↓ effect hints. */
+  effectAudience: BalanceAudience;
 }
 
 /**
@@ -164,6 +168,7 @@ function resolveTransactionType(type: string): TransactionType {
 const TransactionsTable: React.FC<TransactionsTableProps> = function ({
   transactions,
   showDebitCredit,
+  effectAudience,
 }) {
   const { users } = useUserContext();
   const { categories } = useCategoryContext();
@@ -210,7 +215,11 @@ const TransactionsTable: React.FC<TransactionsTableProps> = function ({
                         ? "font-semibold text-green-600 dark:text-green-400"
                         : "font-semibold text-red-600 dark:text-red-400"
                     }>
-                    {arrowEffectLabel(txType, transaction.amount)}
+                    {arrowEffectLabel(
+                      txType,
+                      transaction.amount,
+                      effectAudience
+                    )}
                   </span>
                   {showDebitCredit && (
                     <span className="text-xs text-gray-400 dark:text-gray-500">

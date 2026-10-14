@@ -218,7 +218,8 @@ const AddResultModal: React.FC = function () {
                             }>
                             {arrowEffectLabel(
                               resultAmountToType(row.parsed.amount),
-                              Math.abs(row.parsed.amount)
+                              Math.abs(row.parsed.amount),
+                              "staff"
                             )}
                           </span>
                         </>

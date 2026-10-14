@@ -244,7 +244,7 @@ const UpdateUserBalanceModal: React.FC<UpdateUserBalanceModalProps> = ({
             Clear all
           </Button>
           <p className="w-full text-sm text-gray-500 dark:text-gray-400">
-            Clear all sets below-zero balances to zero (does not change above-zero balances).
+            Clear all zeroes balances we owe (below zero). Does not change balances they owe (above zero).
           </p>
         </Modal.Footer>
       </Modal>

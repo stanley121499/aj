@@ -64,7 +64,8 @@ const OrangeListPage: FC = function () {
               Orange
             </h1>
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              Users with below-zero balances. Adjustments use signed math (increase → balance up, decrease → balance down).
+              Users we owe (below-zero balances). Adjustments use signed math
+              (increase → balance up / they owe more; decrease → balance down / we owe them more).
             </p>
           </div>
           <div className="sm:flex">
@@ -99,7 +100,7 @@ const OrangeListPage: FC = function () {
                 <div className="p-8 text-center text-gray-600 dark:text-gray-300">
                   <p className="mb-2 text-lg font-medium">No users found</p>
                   <p className="text-sm text-gray-500 dark:text-gray-400">
-                    No users currently have below-zero balances.
+                    No users we currently owe (no below-zero balances).
                   </p>
                 </div>
               )}

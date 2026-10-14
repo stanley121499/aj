@@ -35,7 +35,7 @@ interface ParsedCsvRow {
 
 /**
  * Downloads a CSV template for opening-balance import.
- * Columns: username, category, balance (signed target; + = above zero).
+ * Columns: username, category, balance (signed target; + = they owe).
  */
 function downloadOpeningBalancesTemplate(): void {
   const header = "username,category,balance\n";
@@ -350,7 +350,7 @@ const OpeningBalancesCard: React.FC = function () {
           Set opening balances
         </h3>
         <p className="mb-4 text-sm font-normal text-gray-500 dark:text-gray-400">
-          Import a CSV of signed targets (positive = above zero, negative = below zero).
+          Import a CSV of signed targets (positive = they owe, negative = we owe them).
           Each row posts an audit-friendly OPENING transaction. Re-import replaces prior
           OPENING rows for the same user and category.
           {isBakiEnabled
