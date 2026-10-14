@@ -14,6 +14,7 @@ import {
   HiChevronDown,
   // HiTrash
 } from "react-icons/hi";
+import EditBalancesModal from "../../components/edit-balances-modal";
 import NavbarSidebarLayout from "../../layouts/navbar-sidebar";
 import AddUserModal from "./add-user-modal";
 import EditUserModal from "./edit-user-modal";
@@ -202,15 +203,9 @@ const UsersTable: React.FC<UsersTableProps> = function ({
             )}
             <Table.Cell>{user.account_balance.reduce((acc, account_balance) => acc + account_balance.balance, 0)}</Table.Cell>
             <Table.Cell>
-              <div className="flex items-center gap-x-3 whitespace-nowrap">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 whitespace-nowrap">
                 <EditUserModal user={user} />
-                {/* <Button
-                  className="text-red-600 dark:text-red-400"
-                  onClick={() => deleteUser(user)}
-                >
-                  <HiTrash />
-                </Button> */}
-
+                <EditBalancesModal user={user} />
               </div>
             </Table.Cell>
           </Table.Row>
