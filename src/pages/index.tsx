@@ -3,8 +3,13 @@ import React from "react";
 import NavbarSidebarLayout from "../layouts/navbar-sidebar";
 import BalanceCards from "../components/dashboard/balance-cards";
 import CreateNoteForm from "../components/dashboard/create-note-form";
+import PlatformOverview from "../components/dashboard/platform-overview";
+import { useAuthContext } from "../context/AuthContext";
 
 const DashboardPage: React.FC = function () {
+  const { user_detail } = useAuthContext();
+  const isAdmin = user_detail?.role === "admin";
+
   return (
     <NavbarSidebarLayout>
       <div className="grid grid-cols-1 px-4 pt-6 xl:grid-cols-2 xl:gap-4">
@@ -14,6 +19,11 @@ const DashboardPage: React.FC = function () {
           </h1>
           {/* Reset Calculations stays disabled — can duplicate note transactions. */}
         </div>
+        {isAdmin && (
+          <div className="col-span-full">
+            <PlatformOverview />
+          </div>
+        )}
         <div className="col-span-full xl:col-auto">
           <BalanceCards />
         </div>
