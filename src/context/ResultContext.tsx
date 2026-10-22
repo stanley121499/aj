@@ -18,6 +18,7 @@ import { useAccountBalanceContext } from "./AccountBalanceContext";
 import { parseResultLines } from "../utils/resultParser";
 import { createTransactionFromResult } from "../utils/transactionCreator";
 import { useRealtimeSubscription } from "../utils/useRealtimeSubscription";
+import { normalizeEmailLocalPart } from "../utils/createUserAccount";
 
 export type Result = Database["public"]["Tables"]["results"]["Row"];
 export type Results = { results: Result[] };
@@ -141,11 +142,15 @@ export function ResultProvider({ children }: PropsWithChildren) {
     for (const parsedLine of parsedLines) {
       console.log("\nProcessing line:", parsedLine);
       
-      // Find user by username (email without @fruitcalculator.com)
+      // Find user by sanitized username (same rule as opening-balances / Auth email)
       const user = users.find((u) => {
-        const emailUsername = u.email.split("@")[0].toLowerCase();
-        const parsedUsername = parsedLine.username.toLowerCase();
-        return emailUsername === parsedUsername;
+        try {
+          const emailUsername = normalizeEmailLocalPart(u.email.split("@")[0] ?? "");
+          const parsedUsername = normalizeEmailLocalPart(parsedLine.username);
+          return emailUsername === parsedUsername;
+        } catch {
+          return false;
+        }
       });
 
       if (!user) {

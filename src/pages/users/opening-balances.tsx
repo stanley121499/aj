@@ -17,6 +17,7 @@ import {
   buildFruitCalculatorEmail,
   createUserAccount,
   DEFAULT_NEW_USER_PASSWORD,
+  normalizeEmailLocalPart,
 } from "../../utils/createUserAccount";
 import { supabase } from "../../utils/supabaseClient";
 import type { Transaction, TransactionTarget } from "../../types/transaction";
@@ -40,6 +41,11 @@ type OpeningUserAction = "create" | "update";
 /** One preview row after CSV parse and lookup. */
 interface OpeningPreviewRow {
   username: string;
+  /**
+   * Auth email that will be created or matched
+   * (`sanitize(username)@fruitcalculator.com`). Empty when username cannot be sanitized.
+   */
+  accountEmail: string;
   categoryName: string;
   categoryId: number;
   /** Empty when the row will create a user that does not exist yet. */
@@ -183,12 +189,17 @@ function downloadOpeningBalancesTemplate(isBakiEnabled: boolean): void {
 }
 
 /**
- * Normalizes a username for matching against email local-part.
- * @param value - Raw username from CSV
- * @returns Lowercased trimmed username
+ * Matching key for CSV username ↔ existing auth email local-part.
+ * Same sanitizer as create so `alice(ny)` re-imports find `aliceny@…`.
+ * @param value - Raw username or email local-part
+ * @returns Sanitized local-part, or empty string when nothing usable remains
  */
-function normalizeUsername(value: string): string {
-  return value.trim().toLowerCase();
+function usernameMatchKey(value: string): string {
+  try {
+    return normalizeEmailLocalPart(value);
+  } catch {
+    return "";
+  }
 }
 
 /**
@@ -414,12 +425,12 @@ const OpeningBalancesCard: React.FC = function () {
     const createUsernames = new Set(
       valid
         .filter((row) => row.userAction === "create")
-        .map((row) => normalizeUsername(row.username))
+        .map((row) => usernameMatchKey(row.username))
     );
     const updateUsernames = new Set(
       valid
         .filter((row) => row.userAction === "update")
-        .map((row) => normalizeUsername(row.username))
+        .map((row) => usernameMatchKey(row.username))
     );
     const netChange = valid.reduce(
       (acc, row) => (row.hasBalanceUpdate ? acc + row.delta : acc),
@@ -456,10 +467,23 @@ const OpeningBalancesCard: React.FC = function () {
   const buildPreview = useCallback(
     (parsedRows: ParsedCsvRow[]): OpeningPreviewRow[] => {
       return parsedRows.map((row) => {
-        const usernameKey = normalizeUsername(row.username);
-        const user = users.find(
-          (u) => normalizeUsername(u.email.split("@")[0] ?? "") === usernameKey
-        );
+        const usernameKey = usernameMatchKey(row.username);
+        let accountEmail = "";
+        let sanitizeError: string | null = null;
+        try {
+          accountEmail = buildFruitCalculatorEmail(row.username);
+        } catch (error) {
+          sanitizeError =
+            error instanceof Error ? error.message : "Invalid username";
+        }
+
+        const user =
+          usernameKey === ""
+            ? undefined
+            : users.find(
+                (u) =>
+                  usernameMatchKey(u.email.split("@")[0] ?? "") === usernameKey
+              );
         const userAction: OpeningUserAction = user ? "update" : "create";
         const userId = user?.id ?? "";
 
@@ -486,9 +510,28 @@ const OpeningBalancesCard: React.FC = function () {
         const rowBalance = row.balance;
         const rowLedgerTarget = row.ledgerTarget;
 
+        if (sanitizeError !== null) {
+          return {
+            username: row.username,
+            accountEmail,
+            categoryName: rowCategory ?? "",
+            categoryId: 0,
+            userId: "",
+            userAction: "create",
+            ledgerTarget: rowLedgerTarget,
+            current: 0,
+            targetBalance: rowBalance ?? 0,
+            delta: 0,
+            hasBalanceUpdate: rowBalance !== null,
+            profileChanges: [],
+            error: sanitizeError,
+          };
+        }
+
         if (rowBalance === null || rowCategory === null || rowLedgerTarget === null) {
           return {
             username: row.username,
+            accountEmail,
             categoryName: "",
             categoryId: 0,
             userId,
@@ -511,6 +554,7 @@ const OpeningBalancesCard: React.FC = function () {
         if (!category) {
           return {
             username: row.username,
+            accountEmail,
             categoryName: rowCategory,
             categoryId: 0,
             userId,
@@ -528,6 +572,7 @@ const OpeningBalancesCard: React.FC = function () {
         if (rowLedgerTarget === "baki" && !isBakiEnabled) {
           return {
             username: row.username,
+            accountEmail,
             categoryName: category.name,
             categoryId: category.id,
             userId,
@@ -559,6 +604,7 @@ const OpeningBalancesCard: React.FC = function () {
 
         return {
           username: row.username,
+          accountEmail,
           categoryName: category.name,
           categoryId: category.id,
           userId,
@@ -724,13 +770,13 @@ const OpeningBalancesCard: React.FC = function () {
         new Set(
           validRows
             .filter((row) => row.userAction === "create")
-            .map((row) => normalizeUsername(row.username))
+            .map((row) => usernameMatchKey(row.username))
         )
-      );
+      ).filter((key) => key !== "");
 
       for (const usernameKey of createUsernameKeys) {
         const rowsForUser = validRows.filter(
-          (row) => normalizeUsername(row.username) === usernameKey
+          (row) => usernameMatchKey(row.username) === usernameKey
         );
         const displayUsername = rowsForUser[0]?.username ?? usernameKey;
         const profile = collectCreateProfile(rowsForUser);
@@ -748,7 +794,7 @@ const OpeningBalancesCard: React.FC = function () {
 
       const resolvedUserIds = new Map<string, string>();
       for (const row of validRows) {
-        const usernameKey = normalizeUsername(row.username);
+        const usernameKey = usernameMatchKey(row.username);
         if (row.userAction === "create") {
           const createdId = createdUserIds.get(usernameKey);
           if (typeof createdId !== "string" || createdId === "") {
@@ -764,13 +810,13 @@ const OpeningBalancesCard: React.FC = function () {
         new Set(
           validRows
             .filter((row) => row.userAction === "update")
-            .map((row) => normalizeUsername(row.username))
+            .map((row) => usernameMatchKey(row.username))
         )
-      );
+      ).filter((key) => key !== "");
 
       for (const usernameKey of updateUsernameKeys) {
         const rowsForUser = validRows.filter(
-          (row) => normalizeUsername(row.username) === usernameKey
+          (row) => usernameMatchKey(row.username) === usernameKey
         );
         const userId = resolvedUserIds.get(usernameKey);
         if (typeof userId !== "string" || userId === "") {
@@ -783,7 +829,7 @@ const OpeningBalancesCard: React.FC = function () {
       }
 
       for (const row of validRows) {
-        const usernameKey = normalizeUsername(row.username);
+        const usernameKey = usernameMatchKey(row.username);
         const userId = resolvedUserIds.get(usernameKey);
         if (typeof userId !== "string" || userId === "") {
           throw new Error(`Missing user id for ${row.username}`);
@@ -911,6 +957,9 @@ const OpeningBalancesCard: React.FC = function () {
           Usernames that do not match an existing account are created as{" "}
           <code className="text-xs">username@fruitcalculator.com</code> with default password{" "}
           <code className="text-xs">{DEFAULT_NEW_USER_PASSWORD}</code> (same email convention as Add User).
+          Parentheses and other punctuation invalid in email local-parts are stripped for the
+          login email (preview shows the email when it differs); matching uses the same rule so
+          re-imports still find the user.
           {isBakiEnabled
             ? " Columns: username, category, balance, target (account_balance|baki), contact_number (or phone), birthday. A row may set balance only, profile only, or both."
             : " Columns: username, category, balance, contact_number (or phone), birthday. A row may set balance only, profile only, or both (Baki rows are rejected while Baki is off)."}
@@ -978,9 +1027,21 @@ const OpeningBalancesCard: React.FC = function () {
                     const isCreate = row.userAction === "create";
                     const isActionable =
                       isCreate || hasBalanceChange || hasProfileChange;
+                    const rawLocal = row.username.trim().split("@")[0] ?? "";
+                    const emailLocal = row.accountEmail.split("@")[0] ?? "";
+                    const showDerivedEmail =
+                      row.accountEmail !== "" &&
+                      rawLocal.toLowerCase() !== emailLocal;
                     return (
                       <Table.Row key={rowKey}>
-                        <Table.Cell>{row.username}</Table.Cell>
+                        <Table.Cell>
+                          <div>{row.username}</div>
+                          {showDerivedEmail ? (
+                            <div className="text-xs text-gray-500 dark:text-gray-400">
+                              Email: {row.accountEmail}
+                            </div>
+                          ) : null}
+                        </Table.Cell>
                         <Table.Cell>
                           {row.error ? (
                             "—"

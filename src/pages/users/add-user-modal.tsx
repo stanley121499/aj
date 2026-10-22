@@ -14,10 +14,13 @@ import { HiMail, HiPlus } from "react-icons/hi";
 import { LiaBirthdayCakeSolid } from "react-icons/lia";
 import { PiPasswordBold } from "react-icons/pi";
 import { User, useUserContext } from "../../context/UserContext";
+import { buildFruitCalculatorEmail } from "../../utils/createUserAccount";
+import { useAlertContext } from "../../context/AlertContext";
 
 const AddUserModal: React.FC = function () {
   const [isOpen, setOpen] = useState(false);
   const { addUser } = useUserContext();
+  const { showAlert } = useAlertContext();
   const [userData, setUserData] = useState({
     email: "",
     password: "",
@@ -28,24 +31,41 @@ const AddUserModal: React.FC = function () {
     },
   });
 
+  /**
+   * Builds Auth email from username (sanitized local-part) and creates the user.
+   */
   const handleAddUser = async () => {
-    // append @fruitcalculator.com to the email
-    userData.email = `${userData.email.split("@")[0]}@fruitcalculator.com`;
+    let accountEmail: string;
+    try {
+      accountEmail = buildFruitCalculatorEmail(userData.email);
+    } catch (error) {
+      showAlert(
+        error instanceof Error ? error.message : "Invalid username",
+        "error"
+      );
+      return;
+    }
+
+    const nextUserData = {
+      ...userData,
+      email: accountEmail,
+      user_detail: { ...userData.user_detail },
+    };
 
     // Remove empty fields in user_detail
     (
-      Object.keys(userData.user_detail) as Array<
-        keyof typeof userData.user_detail
+      Object.keys(nextUserData.user_detail) as Array<
+        keyof typeof nextUserData.user_detail
       >
     ).forEach((key) => {
-      if (userData.user_detail[key] === "") {
-        delete userData.user_detail[key];
+      if (nextUserData.user_detail[key] === "") {
+        delete nextUserData.user_detail[key];
       }
     });
-    console.log(userData);
+    console.log(nextUserData);
 
     try {
-      await addUser(userData as User);
+      await addUser(nextUserData as User);
       setOpen(false);
     } catch {
       // addUser already surfaces the error via AlertContext

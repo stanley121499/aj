@@ -18,6 +18,7 @@ import { LiaBirthdayCakeSolid } from "react-icons/lia";
 import { PiPasswordBold } from "react-icons/pi";
 import { useAlertContext } from "../../context/AlertContext";
 import { User, useUserContext } from "../../context/UserContext";
+import { buildFruitCalculatorEmail } from "../../utils/createUserAccount";
 
 // Defining props type
 interface EditUserModalProps {
@@ -30,17 +31,30 @@ const EditUserModal: React.FC<EditUserModalProps> = ({ user }) => {
   const { showAlert } = useAlertContext();
   const [userData, setUserData] = useState<User>(user);
 
+  /**
+   * Builds Auth email from username (sanitized local-part) and saves the user.
+   */
   const handleUpdateUser = async () => {
-    // append @fruitcalculator.com to the email
-    userData.email = `${userData.email.split("@")[0]}@fruitcalculator.com`;
+    let accountEmail: string;
+    try {
+      accountEmail = buildFruitCalculatorEmail(userData.email);
+    } catch (error) {
+      showAlert(
+        error instanceof Error ? error.message : "Invalid username",
+        "error"
+      );
+      return;
+    }
 
-    await updateUser(userData).then(() => {
+    const payload: User = { ...userData, email: accountEmail };
+
+    await updateUser(payload).then(() => {
       setOpen(false);
       showAlert("User updated successfully", "success");
-    }).catch((error) => {
+    }).catch((error: Error) => {
       showAlert(error.message, "error");
     });
-  }
+  };
 
   return (
     <>

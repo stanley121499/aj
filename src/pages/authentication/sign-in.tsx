@@ -5,6 +5,7 @@ import React, { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import LoadingPage from "../pages/loading";
 import { useAuthContext } from "../../context/AuthContext";
+import { buildFruitCalculatorEmail } from "../../utils/createUserAccount";
 
 const SignInPage: FC = function () {
   const navigate = useNavigate();
@@ -25,7 +26,7 @@ const SignInPage: FC = function () {
     setError(""); // Clear any previous errors
     
     try {
-      const email = username + "@fruitcalculator.com";
+      const email = buildFruitCalculatorEmail(username);
       const result = await signIn(email, password);
 
       if (result.error) {
