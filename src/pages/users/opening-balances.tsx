@@ -13,6 +13,11 @@ import {
   previewBalanceChange,
   signedDeltaToTransactionType,
 } from "../../utils/balanceLanguage";
+import {
+  buildFruitCalculatorEmail,
+  createUserAccount,
+  DEFAULT_NEW_USER_PASSWORD,
+} from "../../utils/createUserAccount";
 import { supabase } from "../../utils/supabaseClient";
 import type { Transaction, TransactionTarget } from "../../types/transaction";
 
@@ -29,12 +34,18 @@ interface ProfileFieldChange {
   to: string;
 }
 
+/** Whether confirm will create a new auth user or update an existing one. */
+type OpeningUserAction = "create" | "update";
+
 /** One preview row after CSV parse and lookup. */
 interface OpeningPreviewRow {
   username: string;
   categoryName: string;
   categoryId: number;
+  /** Empty when the row will create a user that does not exist yet. */
   userId: string;
+  /** create = username has no account yet; update = match existing user. */
+  userAction: OpeningUserAction;
   /** Which balance the row sets; null when the row has no balance update. */
   ledgerTarget: OpeningLedgerTarget | null;
   current: number;
@@ -396,8 +407,19 @@ const OpeningBalancesCard: React.FC = function () {
     const valid = previewRows.filter((row) => row.error === null);
     const actionable = valid.filter(
       (row) =>
+        row.userAction === "create" ||
         (row.hasBalanceUpdate && row.delta !== 0) ||
         row.profileChanges.length > 0
+    );
+    const createUsernames = new Set(
+      valid
+        .filter((row) => row.userAction === "create")
+        .map((row) => normalizeUsername(row.username))
+    );
+    const updateUsernames = new Set(
+      valid
+        .filter((row) => row.userAction === "update")
+        .map((row) => normalizeUsername(row.username))
     );
     const netChange = valid.reduce(
       (acc, row) => (row.hasBalanceUpdate ? acc + row.delta : acc),
@@ -408,6 +430,8 @@ const OpeningBalancesCard: React.FC = function () {
       validCount: valid.length,
       actionableCount: actionable.length,
       errorCount: previewRows.length - valid.length,
+      createUserCount: createUsernames.size,
+      updateUserCount: updateUsernames.size,
       netChange,
     };
   }, [previewRows]);
@@ -436,31 +460,12 @@ const OpeningBalancesCard: React.FC = function () {
         const user = users.find(
           (u) => normalizeUsername(u.email.split("@")[0] ?? "") === usernameKey
         );
-
-        const emptyBalancePreview = {
-          username: row.username,
-          categoryName: row.category ?? "",
-          categoryId: 0,
-          userId: "",
-          ledgerTarget: row.ledgerTarget,
-          current: 0,
-          targetBalance: row.balance ?? 0,
-          delta: 0,
-          hasBalanceUpdate: row.balance !== null,
-          profileChanges: [] as ProfileFieldChange[],
-          error: null as string | null,
-        };
-
-        if (!user) {
-          return {
-            ...emptyBalancePreview,
-            error: `User not found: ${row.username}`,
-          };
-        }
+        const userAction: OpeningUserAction = user ? "update" : "create";
+        const userId = user?.id ?? "";
 
         const profileChanges: ProfileFieldChange[] = [];
-        const currentContact = user.user_detail?.contact_number ?? null;
-        const currentBirthday = user.user_detail?.birthday ?? null;
+        const currentContact = user?.user_detail?.contact_number ?? null;
+        const currentBirthday = user?.user_detail?.birthday ?? null;
 
         if (row.contactNumber !== null && row.contactNumber !== currentContact) {
           profileChanges.push({
@@ -486,7 +491,8 @@ const OpeningBalancesCard: React.FC = function () {
             username: row.username,
             categoryName: "",
             categoryId: 0,
-            userId: user.id,
+            userId,
+            userAction,
             ledgerTarget: null,
             current: 0,
             targetBalance: 0,
@@ -507,7 +513,8 @@ const OpeningBalancesCard: React.FC = function () {
             username: row.username,
             categoryName: rowCategory,
             categoryId: 0,
-            userId: user.id,
+            userId,
+            userAction,
             ledgerTarget: rowLedgerTarget,
             current: 0,
             targetBalance: rowBalance,
@@ -523,7 +530,8 @@ const OpeningBalancesCard: React.FC = function () {
             username: row.username,
             categoryName: category.name,
             categoryId: category.id,
-            userId: user.id,
+            userId,
+            userAction,
             ledgerTarget: rowLedgerTarget,
             current: 0,
             targetBalance: rowBalance,
@@ -535,13 +543,16 @@ const OpeningBalancesCard: React.FC = function () {
         }
 
         const current =
-          rowLedgerTarget === "baki"
-            ? (bakis.find(
-                (b) => b.user_id === user.id && b.category_id === category.id
-              )?.balance ?? 0)
-            : (accountBalances.find(
-                (ab) => ab.user_id === user.id && ab.category_id === category.id
-              )?.balance ?? 0);
+          userAction === "create"
+            ? 0
+            : rowLedgerTarget === "baki"
+              ? (bakis.find(
+                  (b) => b.user_id === userId && b.category_id === category.id
+                )?.balance ?? 0)
+              : (accountBalances.find(
+                  (ab) =>
+                    ab.user_id === userId && ab.category_id === category.id
+                )?.balance ?? 0);
 
         const targetBalance = rowBalance;
         const delta = targetBalance - current;
@@ -550,7 +561,8 @@ const OpeningBalancesCard: React.FC = function () {
           username: row.username,
           categoryName: category.name,
           categoryId: category.id,
-          userId: user.id,
+          userId,
+          userAction,
           ledgerTarget: rowLedgerTarget,
           current,
           targetBalance,
@@ -643,7 +655,48 @@ const OpeningBalancesCard: React.FC = function () {
   };
 
   /**
-   * Confirms import: optional profile updates, reverse prior OPENING, then post new OPENING deltas.
+   * Merges profile field changes across rows for one username (last value wins).
+   * @param rows - Valid preview rows for one username
+   * @returns Deduplicated profile changes
+   */
+  const mergeProfileChanges = (
+    rows: OpeningPreviewRow[]
+  ): ProfileFieldChange[] => {
+    const byField = new Map<ProfileFieldKey, ProfileFieldChange>();
+    for (const row of rows) {
+      for (const change of row.profileChanges) {
+        byField.set(change.field, change);
+      }
+    }
+    return Array.from(byField.values());
+  };
+
+  /**
+   * Collects profile values to stamp onto a newly created user from all CSV rows
+   * for that username (last non-empty wins per field).
+   * @param rows - Valid preview rows for one username
+   * @returns contact/birthday to pass into createUserAccount
+   */
+  const collectCreateProfile = (
+    rows: OpeningPreviewRow[]
+  ): { contactNumber: string | null; birthday: string | null } => {
+    const merged = mergeProfileChanges(rows);
+    let contactNumber: string | null = null;
+    let birthday: string | null = null;
+    for (const change of merged) {
+      if (change.field === "contact_number") {
+        contactNumber = change.to;
+      }
+      if (change.field === "birthday") {
+        birthday = change.to;
+      }
+    }
+    return { contactNumber, birthday };
+  };
+
+  /**
+   * Confirms import: create missing users, optional profile updates, reverse prior
+   * OPENING, then post new OPENING deltas.
    */
   const handleConfirm = async () => {
     if (!isAdmin || isConfirming) {
@@ -653,6 +706,7 @@ const OpeningBalancesCard: React.FC = function () {
     const validRows = previewRows.filter((row) => row.error === null);
     const actionableRows = validRows.filter(
       (row) =>
+        row.userAction === "create" ||
         (row.hasBalanceUpdate && row.delta !== 0) ||
         row.profileChanges.length > 0
     );
@@ -663,9 +717,76 @@ const OpeningBalancesCard: React.FC = function () {
 
     setIsConfirming(true);
     try {
+      const categoryIds = categories.map((category) => category.id);
+      const createdUserIds = new Map<string, string>();
+
+      const createUsernameKeys = Array.from(
+        new Set(
+          validRows
+            .filter((row) => row.userAction === "create")
+            .map((row) => normalizeUsername(row.username))
+        )
+      );
+
+      for (const usernameKey of createUsernameKeys) {
+        const rowsForUser = validRows.filter(
+          (row) => normalizeUsername(row.username) === usernameKey
+        );
+        const displayUsername = rowsForUser[0]?.username ?? usernameKey;
+        const profile = collectCreateProfile(rowsForUser);
+        const created = await createUserAccount({
+          email: buildFruitCalculatorEmail(displayUsername),
+          password: DEFAULT_NEW_USER_PASSWORD,
+          role: "customer",
+          contactNumber: profile.contactNumber,
+          birthday: profile.birthday,
+          categoryIds,
+          createBakis: isBakiEnabled,
+        });
+        createdUserIds.set(usernameKey, created.id);
+      }
+
+      const resolvedUserIds = new Map<string, string>();
       for (const row of validRows) {
-        if (row.profileChanges.length > 0) {
-          await applyProfileChanges(row.userId, row.profileChanges);
+        const usernameKey = normalizeUsername(row.username);
+        if (row.userAction === "create") {
+          const createdId = createdUserIds.get(usernameKey);
+          if (typeof createdId !== "string" || createdId === "") {
+            throw new Error(`Failed to resolve created user: ${row.username}`);
+          }
+          resolvedUserIds.set(usernameKey, createdId);
+        } else {
+          resolvedUserIds.set(usernameKey, row.userId);
+        }
+      }
+
+      const updateUsernameKeys = Array.from(
+        new Set(
+          validRows
+            .filter((row) => row.userAction === "update")
+            .map((row) => normalizeUsername(row.username))
+        )
+      );
+
+      for (const usernameKey of updateUsernameKeys) {
+        const rowsForUser = validRows.filter(
+          (row) => normalizeUsername(row.username) === usernameKey
+        );
+        const userId = resolvedUserIds.get(usernameKey);
+        if (typeof userId !== "string" || userId === "") {
+          throw new Error(`Missing user id for ${usernameKey}`);
+        }
+        const mergedProfile = mergeProfileChanges(rowsForUser);
+        if (mergedProfile.length > 0) {
+          await applyProfileChanges(userId, mergedProfile);
+        }
+      }
+
+      for (const row of validRows) {
+        const usernameKey = normalizeUsername(row.username);
+        const userId = resolvedUserIds.get(usernameKey);
+        if (typeof userId !== "string" || userId === "") {
+          throw new Error(`Missing user id for ${row.username}`);
         }
 
         if (!row.hasBalanceUpdate || row.ledgerTarget === null) {
@@ -677,7 +798,7 @@ const OpeningBalancesCard: React.FC = function () {
         }
 
         const prior = findPriorOpenings(
-          row.userId,
+          userId,
           row.categoryId,
           row.ledgerTarget
         );
@@ -686,7 +807,7 @@ const OpeningBalancesCard: React.FC = function () {
         }
 
         if (row.ledgerTarget === "baki") {
-          const baki = await getOrCreateBaki(row.userId, row.categoryId);
+          const baki = await getOrCreateBaki(userId, row.categoryId);
 
           const { data: fresh, error: freshError } = await supabase
             .from("bakis")
@@ -707,7 +828,7 @@ const OpeningBalancesCard: React.FC = function () {
 
           const { type, amount } = signedDeltaToTransactionType(delta);
           await addTransaction({
-            user_id: row.userId,
+            user_id: userId,
             category_id: row.categoryId,
             amount,
             type,
@@ -719,7 +840,7 @@ const OpeningBalancesCard: React.FC = function () {
         }
 
         const accountBalance = await getOrCreateAccountBalance(
-          row.userId,
+          userId,
           row.categoryId
         );
 
@@ -742,7 +863,7 @@ const OpeningBalancesCard: React.FC = function () {
 
         const { type, amount } = signedDeltaToTransactionType(delta);
         await addTransaction({
-          user_id: row.userId,
+          user_id: userId,
           category_id: row.categoryId,
           amount,
           type,
@@ -752,7 +873,13 @@ const OpeningBalancesCard: React.FC = function () {
         });
       }
 
-      showAlert("Opening balances and profile fields applied", "success");
+      const createdCount = createUsernameKeys.length;
+      showAlert(
+        createdCount > 0
+          ? `Import applied (${String(createdCount)} user(s) created; default password ${DEFAULT_NEW_USER_PASSWORD})`
+          : "Opening balances and profile fields applied",
+        "success"
+      );
       setPreviewRows([]);
     } catch (error) {
       console.error("Opening balances import failed:", error);
@@ -780,7 +907,10 @@ const OpeningBalancesCard: React.FC = function () {
           Each balance row posts an audit-friendly OPENING transaction. Re-import replaces prior
           OPENING rows for the same user, category, and target.
           Optional profile columns update user details when filled; empty cells leave existing
-          values unchanged. Role is not imported from CSV.
+          values unchanged. Role is not imported from CSV (new accounts are always customer).
+          Usernames that do not match an existing account are created as{" "}
+          <code className="text-xs">username@fruitcalculator.com</code> with default password{" "}
+          <code className="text-xs">{DEFAULT_NEW_USER_PASSWORD}</code> (same email convention as Add User).
           {isBakiEnabled
             ? " Columns: username, category, balance, target (account_balance|baki), contact_number (or phone), birthday. A row may set balance only, profile only, or both."
             : " Columns: username, category, balance, contact_number (or phone), birthday. A row may set balance only, profile only, or both (Baki rows are rejected while Baki is off)."}
@@ -812,6 +942,8 @@ const OpeningBalancesCard: React.FC = function () {
                 ? ` (${summary.errorCount} errors)`
                 : ""}
               {" · "}
+              {summary.createUserCount} create / {summary.updateUserCount} update
+              {" · "}
               {summary.actionableCount} with changes
               {" · "}
               Net balance change {formatSignedBalance(summary.netChange)}
@@ -820,6 +952,7 @@ const OpeningBalancesCard: React.FC = function () {
               <Table>
                 <Table.Head>
                   <Table.HeadCell>User</Table.HeadCell>
+                  <Table.HeadCell>Action</Table.HeadCell>
                   <Table.HeadCell>Category</Table.HeadCell>
                   {showLedgerTargetColumn && (
                     <Table.HeadCell>Target</Table.HeadCell>
@@ -842,9 +975,25 @@ const OpeningBalancesCard: React.FC = function () {
                     const hasBalanceChange =
                       row.hasBalanceUpdate && row.delta !== 0;
                     const hasProfileChange = row.profileChanges.length > 0;
+                    const isCreate = row.userAction === "create";
+                    const isActionable =
+                      isCreate || hasBalanceChange || hasProfileChange;
                     return (
                       <Table.Row key={rowKey}>
                         <Table.Cell>{row.username}</Table.Cell>
+                        <Table.Cell>
+                          {row.error ? (
+                            "—"
+                          ) : isCreate ? (
+                            <span className="text-blue-700 dark:text-blue-400">
+                              Create
+                            </span>
+                          ) : (
+                            <span className="text-gray-700 dark:text-gray-300">
+                              Update
+                            </span>
+                          )}
+                        </Table.Cell>
                         <Table.Cell>
                           {row.hasBalanceUpdate ? row.categoryName : "—"}
                         </Table.Cell>
@@ -876,11 +1025,11 @@ const OpeningBalancesCard: React.FC = function () {
                             <span className="text-red-600 dark:text-red-400">
                               {row.error}
                             </span>
-                          ) : !hasBalanceChange && !hasProfileChange ? (
+                          ) : !isActionable ? (
                             <span className="text-gray-500">No change</span>
                           ) : (
                             <span className="text-green-700 dark:text-green-400">
-                              Ready
+                              {isCreate ? "Will create" : "Ready"}
                             </span>
                           )}
                         </Table.Cell>

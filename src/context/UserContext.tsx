@@ -11,6 +11,7 @@ import { useAlertContext } from "./AlertContext";
 import { useCategoryContext } from "./CategoryContext";
 import { Baki } from "./BakiContext";
 import { AccountBalance } from "./AccountBalanceContext";
+import { createUserAccount } from "../utils/createUserAccount";
 
 export type User = {
   id: string;
@@ -161,51 +162,34 @@ export function UserProvider({ children }: PropsWithChildren) {
 
   const addUser = async (user: User) => {
     setLoading(true);
-    const { data, error } = await supabase.auth.admin.createUser({
-      email: user.email,
-      password: user.password,
-      email_confirm: true,
-    });
+    try {
+      const password = user.password;
+      if (typeof password !== "string" || password.trim() === "") {
+        throw new Error("Password is required");
+      }
 
-    if (error) {
+      const role = user.user_detail?.role ?? "customer";
+      await createUserAccount({
+        email: user.email,
+        password,
+        role,
+        contactNumber: user.user_detail?.contact_number ?? null,
+        birthday: user.user_detail?.birthday ?? null,
+        categoryIds: categories.map((category) => category.id),
+        createBakis: true,
+      });
+
+      showAlert("User added successfully", "success");
+    } catch (error) {
       console.error("Error adding user:", error);
-      showAlert("Error adding user", "error");
+      showAlert(
+        error instanceof Error ? error.message : "Error adding user",
+        "error"
+      );
+      throw error;
+    } finally {
       setLoading(false);
-      return;
     }
-
-    // Create User Details
-    const { error: userDetailError } = await supabase
-      .from("user_details")
-      .insert([{ ...user.user_detail, user_id: data.user.id }]);
-
-    if (userDetailError) {
-      console.error("Error adding user details:", userDetailError);
-      showAlert("Error adding user details", "error");
-      setLoading(false);
-      return;
-    }
-
-    // Create Account Balance
-    categories.forEach(async (category) => {
-      await supabase.from("account_balances").insert({
-        user_id: data.user.id,
-        category_id: category.id,
-        balance: 0,
-      });
-    });
-
-    // Create Baki
-    categories.forEach(async (category) => {
-      await supabase.from("bakis").insert({
-        user_id: data.user.id,
-        category_id: category.id,
-        balance: 0,
-      });
-    });
-
-    showAlert("User added successfully", "success");
-    setLoading(false);
   };
 
   const deleteUser = async (user: User) => {

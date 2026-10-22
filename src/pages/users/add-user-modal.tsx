@@ -13,13 +13,11 @@ import { FaPhoneFlip } from "react-icons/fa6";
 import { HiMail, HiPlus } from "react-icons/hi";
 import { LiaBirthdayCakeSolid } from "react-icons/lia";
 import { PiPasswordBold } from "react-icons/pi";
-import { useAlertContext } from "../../context/AlertContext";
 import { User, useUserContext } from "../../context/UserContext";
 
 const AddUserModal: React.FC = function () {
   const [isOpen, setOpen] = useState(false);
   const { addUser } = useUserContext();
-  const { showAlert } = useAlertContext();
   const [userData, setUserData] = useState({
     email: "",
     password: "",
@@ -46,14 +44,12 @@ const AddUserModal: React.FC = function () {
     });
     console.log(userData);
 
-    await addUser(userData as User)
-      .then(() => {
-        setOpen(false);
-        showAlert("User added successfully", "success");
-      })
-      .catch((error) => {
-        showAlert(error.message, "error");
-      });
+    try {
+      await addUser(userData as User);
+      setOpen(false);
+    } catch {
+      // addUser already surfaces the error via AlertContext
+    }
   };
 
   return (
