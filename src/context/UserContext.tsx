@@ -12,6 +12,7 @@ import { useCategoryContext } from "./CategoryContext";
 import { Baki } from "./BakiContext";
 import { AccountBalance } from "./AccountBalanceContext";
 import { createUserAccount } from "../utils/createUserAccount";
+import { fetchAllRows } from "../utils/supabaseFetchAll";
 
 export type User = {
   id: string;
@@ -87,13 +88,17 @@ export function UserProvider({ children }: PropsWithChildren) {
           };
         }).filter((user): user is NonNullable<typeof user> => user !== null);
 
-        // Fetch account balances
-        const { data: accountBalances, error: balanceError } = await supabase
-          .from("account_balances")
-          .select("*");
-
-        if (balanceError) {
-          console.error("Error fetching account balances:", balanceError);
+        // Must page — PostgREST defaults to max 1000 rows; we have more ledgers.
+        let accountBalances: AccountBalance[];
+        let bakis: Baki[];
+        try {
+          accountBalances = await fetchAllRows<AccountBalance>(
+            supabase,
+            "account_balances"
+          );
+          bakis = await fetchAllRows<Baki>(supabase, "bakis");
+        } catch (ledgerError) {
+          console.error("Error fetching ledgers:", ledgerError);
           showAlert("Error fetching account balances", "error");
           return;
         }
@@ -101,24 +106,15 @@ export function UserProvider({ children }: PropsWithChildren) {
         // Add account balances to users
         const usersWithBalances = usersWithDetails.map(user => ({
           ...user,
-          account_balance: accountBalances?.filter(balance => balance.user_id === user.id) || []
+          account_balance: accountBalances.filter(
+            (balance) => balance.user_id === user.id
+          )
         }));
-
-        // Fetch bakis
-        const { data: bakis, error: bakiError } = await supabase
-          .from("bakis")
-          .select("*");
-
-        if (bakiError) {
-          console.error("Error fetching bakis:", bakiError);
-          showAlert("Error fetching bakis", "error");
-          return;
-        }
 
         // Add bakis to users
         const finalUsers = usersWithBalances.map(user => ({
           ...user,
-          baki: bakis?.filter(baki => baki.user_id === user.id) || []
+          baki: bakis.filter((baki) => baki.user_id === user.id)
         }));
 
         setUsers(finalUsers);

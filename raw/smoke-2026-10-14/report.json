@@ -1,0 +1,60 @@
+{
+  "generatedAt": "2026-10-14T02:20:00.000Z",
+  "method": "Playwright fallback (Cursor browser MCP navigate/lock still broken)",
+  "mcpNotes": "browser_tabs new creates a viewId, but browser_navigate with that viewId returns 'Browser view not found'; navigate without viewId returns 'No browser tab available'. No lasting logged-in Cursor tab available.",
+  "session": {
+    "status": "BLOCKED",
+    "urlAfterDashboard": "http://localhost:3000/authentication/sign-in",
+    "note": "User login in another browser does not apply to automation browsers."
+  },
+  "report": [
+    {
+      "step": "1. Dashboard (/dashboard)",
+      "status": "BLOCKED",
+      "evidence": "Auth wall -> sign-in. Screenshot: 10-dashboard.png (Sign in to platform)"
+    },
+    {
+      "step": "2. Onboarding (/onboarding)",
+      "status": "BLOCKED",
+      "evidence": "Not run — no authenticated session in automation browser"
+    },
+    {
+      "step": "3. Transactions (/transactions)",
+      "status": "BLOCKED",
+      "evidence": "Not run — no authenticated session in automation browser"
+    },
+    {
+      "step": "4. Notes (/notes)",
+      "status": "BLOCKED",
+      "evidence": "Not run — no authenticated session in automation browser"
+    },
+    {
+      "step": "5. Results (/results)",
+      "status": "BLOCKED",
+      "evidence": "Not run — no authenticated session in automation browser"
+    },
+    {
+      "step": "6. Orange (/orange)",
+      "status": "BLOCKED",
+      "evidence": "Not run — no authenticated session in automation browser"
+    },
+    {
+      "step": "7. Settings (/users/settings)",
+      "status": "BLOCKED",
+      "evidence": "Not run — no authenticated session in automation browser"
+    },
+    {
+      "step": "8. Opening balances (optional)",
+      "status": "BLOCKED",
+      "evidence": "Not run — no authenticated session in automation browser"
+    }
+  ],
+  "consoleErrors": [
+    "403 on resource load",
+    "AuthApiError: invalid claim: missing sub claim (Supabase getUser)"
+  ],
+  "unblock": [
+    "Open http://localhost:3000 in the Cursor IDE browser panel and sign in there (same profile the agent can control), then ask to resume smoke.",
+    "Or export a Playwright storageState while logged in and share the file path (no passwords in chat)."
+  ]
+}

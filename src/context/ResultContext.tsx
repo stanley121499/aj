@@ -19,6 +19,9 @@ import { parseResultLines } from "../utils/resultParser";
 import { createTransactionFromResult } from "../utils/transactionCreator";
 import { useRealtimeSubscription } from "../utils/useRealtimeSubscription";
 import { normalizeEmailLocalPart } from "../utils/createUserAccount";
+import { fetchAllRows } from "../utils/supabaseFetchAll";
+import type { AccountBalance } from "./AccountBalanceContext";
+import type { Baki } from "./BakiContext";
 
 export type Result = Database["public"]["Tables"]["results"]["Row"];
 export type Results = { results: Result[] };
@@ -112,29 +115,16 @@ export function ResultProvider({ children }: PropsWithChildren) {
     console.log("Processing result lines:", parsedLines);
     console.log("Total users available:", users.length);
 
-    // Get fresh account balances before processing
-    const { data: freshAccountBalances, error: balanceError } = await supabase
-      .from("account_balances")
-      .select("*");
-
-    if (balanceError) {
-      console.error("Error fetching fresh account balances:", balanceError);
-      throw balanceError;
-    }
-
-    // Get fresh bakis before processing
-    const { data: freshBakis, error: bakiError } = await supabase
-      .from("bakis")
-      .select("*");
-
-    if (bakiError) {
-      console.error("Error fetching fresh bakis:", bakiError);
-      throw bakiError;
-    }
+    // Must page — PostgREST defaults to max 1000 rows; we have more ledgers.
+    const freshAccountBalances = await fetchAllRows<AccountBalance>(
+      supabase,
+      "account_balances"
+    );
+    const freshBakis = await fetchAllRows<Baki>(supabase, "bakis");
 
     console.log("Fresh balances fetched:", {
-      accountBalances: freshAccountBalances?.length,
-      bakis: freshBakis?.length
+      accountBalances: freshAccountBalances.length,
+      bakis: freshBakis.length
     });
 
     const skippedUsers: string[] = [];

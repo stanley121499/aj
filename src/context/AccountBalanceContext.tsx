@@ -3,6 +3,7 @@ import { supabase } from "../utils/supabaseClient";
 import { Database } from "../../database.types";
 import { useAlertContext } from "./AlertContext";
 import { useAuthContext } from "./AuthContext";
+import { fetchAllRows } from "../utils/supabaseFetchAll";
 import { useRealtimeSubscription } from "../utils/useRealtimeSubscription";
 
 export type AccountBalance = Database['public']['Tables']['account_balances']['Row'];
@@ -35,21 +36,18 @@ export function AccountBalanceProvider({ children }: Readonly<PropsWithChildren>
     const fetchAccountBalances = async () => {
       setLoading(true);
       try {
-        const { data: balances, error } = await supabase
-          .from("account_balances")
-          .select("*");
-
-        if (error) {
-          console.error("Error fetching account balances:", error);
-          showAlert("Error fetching account balances", "error");
-        }
+        // Must page — PostgREST defaults to max 1000 rows; we have more ledgers.
+        const balances = await fetchAllRows<AccountBalance>(
+          supabase,
+          "account_balances"
+        );
 
         if (!cancelled) {
-          setAccountBalances(balances || []);
+          setAccountBalances(balances);
           setCurrentUserAccountBalance(
-            balances?.filter(
+            balances.filter(
               (accountBalance) => accountBalance.user_id === user?.id
-            ) || []
+            )
           );
         }
       } catch (error) {

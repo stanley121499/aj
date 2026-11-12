@@ -4,6 +4,7 @@ import { Database } from "../../database.types";
 import { useAlertContext } from "./AlertContext";
 import { useAppSettingsContext } from "./AppSettingsContext";
 import { useAuthContext } from "./AuthContext";
+import { fetchAllRows } from "../utils/supabaseFetchAll";
 import { useRealtimeSubscription } from "../utils/useRealtimeSubscription";
 
 /** Shared error message when Baki mutations are blocked by the kill-switch. */
@@ -48,19 +49,13 @@ export function BakiProvider({ children }: PropsWithChildren) {
     const fetchBakis = async () => {
       setLoading(true);
       try {
-        const { data: bakis, error } = await supabase
-          .from("bakis")
-          .select("*");
-
-        if (error) {
-          console.error("Error fetching bakis:", error);
-          showAlert("Error fetching bakis", "error");
-        }
+        // Must page — PostgREST defaults to max 1000 rows; we have more ledgers.
+        const bakis = await fetchAllRows<Baki>(supabase, "bakis");
 
         if (!cancelled) {
-          setBakis(bakis || []);
+          setBakis(bakis);
           setCurrentUserBaki(
-            bakis?.filter((baki) => baki.user_id === user?.id) || []
+            bakis.filter((baki) => baki.user_id === user?.id)
           );
         }
       } catch (error) {
